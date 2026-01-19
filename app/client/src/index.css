@@ -1,0 +1,67 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  /* iOS Safari - brak bounce scroll */
+  html, body {
+    overscroll-behavior: none;
+  }
+
+  body {
+    @apply bg-gray-900 text-gray-100 min-h-screen;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+  }
+
+  /* Safe areas dla notcha iPhone */
+  .safe-area-bottom {
+    padding-bottom: env(safe-area-inset-bottom, 20px);
+  }
+
+  /* Minimalne touch targets 44px (Apple HIG) */
+  button, a, [role="button"] {
+    min-height: 44px;
+  }
+
+  /* Smooth scrolling iOS */
+  .scroll-container {
+    -webkit-overflow-scrolling: touch;
+  }
+
+  input[type="number"] {
+    -moz-appearance: textfield;
+  }
+
+  input[type="number"]::-webkit-inner-spin-button,
+  input[type="number"]::-webkit-outer-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
+}
+
+@layer components {
+  .btn-primary {
+    @apply bg-primary-600 hover:bg-primary-700 active:bg-primary-800 text-white font-medium py-3 px-6 rounded-lg transition-colors;
+  }
+
+  .btn-secondary {
+    @apply bg-gray-700 hover:bg-gray-600 active:bg-gray-500 text-white font-medium py-3 px-6 rounded-lg transition-colors;
+  }
+
+  .input-field {
+    @apply bg-gray-800 border border-gray-600 rounded-lg px-4 py-3 text-white text-center text-lg font-medium focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent;
+  }
+
+  .card {
+    @apply bg-gray-800 rounded-xl p-4 shadow-lg;
+  }
+
+  /* Wieksze touch targets na silowni (spocone rece) */
+  .touch-target-lg {
+    @apply min-h-[52px] min-w-[52px];
+  }
+}

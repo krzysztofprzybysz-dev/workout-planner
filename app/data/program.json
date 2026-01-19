@@ -1,0 +1,291 @@
+{
+  "exercises": [
+    {
+      "id": 1,
+      "name": "Leg Press",
+      "muscle_group": "Nogi",
+      "substitution_1": "Hack Squat",
+      "notes": "Zastępstwo: Jeśli nie masz Hack Squata, rób Leg Press"
+    },
+    {
+      "id": 2,
+      "name": "Incline DB Press",
+      "muscle_group": "Klatka",
+      "notes": "Wyciskanie hantli na skosie dodatnim - hantle trudniejsze niż maszyna"
+    },
+    {
+      "id": 3,
+      "name": "Seated Hamstring Curl",
+      "muscle_group": "Dwugłowe uda",
+      "notes": "Uginanie nóg siedząc - przytrzymaj spięcie przez ułamek sekundy"
+    },
+    {
+      "id": 4,
+      "name": "T-Bar Row",
+      "muscle_group": "Plecy",
+      "substitution_1": "Wiosłowanie hantlem w oparciu o ławkę",
+      "notes": "Wiosłowanie półsztangą lub maszyną"
+    },
+    {
+      "id": 5,
+      "name": "DB Bicep Curl",
+      "muscle_group": "Biceps",
+      "notes": "Uginanie ramion z hantlami - kończymy dropsetem"
+    },
+    {
+      "id": 6,
+      "name": "DB Lateral Raise",
+      "muscle_group": "Barki",
+      "notes": "Wznosy bokiem hantlami - łokcie prowadzą ruch, nie bujaj tułowiem"
+    },
+    {
+      "id": 7,
+      "name": "Cable Crunch",
+      "muscle_group": "Brzuch",
+      "notes": "Spięcia brzucha na wyciągu klęcząc - zaokrąglij plecy (koci grzbiet)"
+    },
+    {
+      "id": 8,
+      "name": "Flat DB Press",
+      "muscle_group": "Klatka",
+      "notes": "Wyciskanie hantli płasko - na płaskiej ławce jesteś silniejszy"
+    },
+    {
+      "id": 9,
+      "name": "2-Grip Lat Pulldown",
+      "muscle_group": "Plecy",
+      "notes": "Ściąganie drążka wyciągu górnego - seria 1: chwyt szeroki, seria 2: chwyt wąski"
+    },
+    {
+      "id": 10,
+      "name": "Seated DB Shoulder Press",
+      "muscle_group": "Barki",
+      "notes": "Wyciskanie hantli siedząc - plecy oparte, brzuch napięty"
+    },
+    {
+      "id": 11,
+      "name": "Seated Cable Row",
+      "muscle_group": "Plecy",
+      "notes": "Przyciąganie linki wyciągu dolnego - ściągaj łopatki, klatka wypięta"
+    },
+    {
+      "id": 12,
+      "name": "EZ Bar Skull Crusher",
+      "muscle_group": "Triceps",
+      "notes": "Wyciskanie francuskie sztangą - super-seria z bicepsem (A1)"
+    },
+    {
+      "id": 13,
+      "name": "EZ Bar Curl",
+      "muscle_group": "Biceps",
+      "notes": "Uginanie ramion ze sztangą - super-seria z tricepsem (A2)"
+    },
+    {
+      "id": 14,
+      "name": "Romanian Deadlift",
+      "muscle_group": "Dwugłowe uda/Plecy",
+      "notes": "Rumuński Martwy Ciąg - wypychaj biodra mocno w tył, plecy proste jak struna"
+    },
+    {
+      "id": 15,
+      "name": "Leg Extension",
+      "muscle_group": "Czworogłowe",
+      "notes": "Wyprosty nóg - kończymy dropsetem"
+    },
+    {
+      "id": 16,
+      "name": "Seated Calf Raise",
+      "muscle_group": "Łydki",
+      "notes": "Wspięcia na palce siedząc - pełen zakres, pauza na górze. Super-seria z brzuchem (A1)"
+    }
+  ],
+  "workoutDays": [
+    {
+      "day": 1,
+      "name": "Full Body (Całe ciało)",
+      "exercises": [
+        {
+          "exerciseId": 1,
+          "order": 1,
+          "sets": [
+            {"type": "warmup", "weight": 45, "reps": "10", "notes": "Rozgrzewka stawów kolanowych"},
+            {"type": "warmup", "weight": 70, "reps": "4-5", "notes": "Ostatnie przetarcie przed głównym ciężarem"},
+            {"type": "heavy", "weight": 95, "reps": "4-6", "rpe": 9, "notes": "RPE 8-9. To jest Twoja seria na siłę!"},
+            {"type": "backoff", "weight": 80, "reps": "8-10", "rpe": 8, "notes": "Zdejmij ok. 10-20% ciężaru. Wolniejsze tempo."}
+          ]
+        },
+        {
+          "exerciseId": 2,
+          "order": 2,
+          "sets": [
+            {"type": "warmup", "weight": 7, "reps": "10-12", "notes": "Bardzo lekko, ustawienie toru ruchu"},
+            {"type": "warmup", "weight": 10, "reps": "3-5", "notes": "Poczucie ciężaru, spięcie łopatek"},
+            {"type": "working", "weight": 13, "reps": "8-10", "rpe": 8, "notes": "Główna praca. Opuszczaj hantle nisko"},
+            {"type": "working", "weight": 13, "reps": "8-10", "rpe": 8, "notes": "Postaraj się utrzymać ten sam ciężar"}
+          ]
+        },
+        {
+          "exerciseId": 3,
+          "order": 3,
+          "sets": [
+            {"type": "warmup", "weight": 20, "reps": "10-12", "notes": "Lekkie ukrwienie mięśnia"},
+            {"type": "working", "weight": 37.5, "reps": "10-12", "rpe": 8, "notes": "Jedna solidna seria. Przytrzymaj spięcie."}
+          ]
+        },
+        {
+          "exerciseId": 4,
+          "order": 4,
+          "sets": [
+            {"type": "warmup", "weight": 17.5, "reps": "10-12", "notes": "Rozgrzanie pleców, skupienie na pracy łopatek"},
+            {"type": "working", "weight": 27.5, "reps": "10-12", "rpe": 8, "notes": "Plecy proste, ciągnij łokcie blisko tułowia"},
+            {"type": "working", "weight": 27.5, "reps": "10-12", "rpe": 8, "notes": "Utrzymaj technikę. Nie szarp ciężarem."}
+          ]
+        },
+        {
+          "exerciseId": 5,
+          "order": 5,
+          "sets": [
+            {"type": "warmup", "weight": 4.5, "reps": "10-12", "notes": "Lekko"},
+            {"type": "working", "weight": 8, "reps": "12-15", "rpe": 9, "notes": "Rób do momentu, aż będzie ciężko"},
+            {"type": "dropset", "weight": 4, "reps": "max", "notes": "Bez odpoczynku! Zmniejsz ciężar o 50% i rób do upadku"}
+          ]
+        },
+        {
+          "exerciseId": 6,
+          "order": 6,
+          "sets": [
+            {"type": "warmup", "weight": 2.5, "reps": "10-12", "notes": "Rozgrzewka barków"},
+            {"type": "working", "weight": 5.5, "reps": "12-15", "rpe": 9, "notes": "Wznosy na boki. Nie bujaj tułowiem."},
+            {"type": "dropset", "weight": 2.5, "reps": "max", "notes": "Bez odpoczynku! Zmniejsz ciężar o połowę i dobij barki."}
+          ]
+        },
+        {
+          "exerciseId": 7,
+          "order": 7,
+          "sets": [
+            {"type": "working", "weight": 35, "reps": "12-15", "rpe": 8, "notes": "Zaokrąglij plecy (koci grzbiet), spinaj brzuch"},
+            {"type": "dropset", "weight": 17.5, "reps": "max", "notes": "Bez odpoczynku! Zmniejsz ciężar i dopal mięśnie brzucha."}
+          ]
+        }
+      ]
+    },
+    {
+      "day": 2,
+      "name": "Upper Body (Góra Ciała)",
+      "exercises": [
+        {
+          "exerciseId": 8,
+          "order": 1,
+          "sets": [
+            {"type": "warmup", "weight": 7.5, "reps": "10", "notes": "Rozgrzewka klatki piersiowej"},
+            {"type": "warmup", "weight": 12, "reps": "4-5", "notes": "Przyzwyczajenie do ciężaru"},
+            {"type": "heavy", "weight": 15, "reps": "4-6", "rpe": 9, "notes": "RPE 8-9. Seria siłowa, mało powtórzeń, duży ciężar"},
+            {"type": "backoff", "weight": 13, "reps": "8-10", "rpe": 8, "notes": "Zmniejsz ciężar, pełna kontrola ruchu"}
+          ]
+        },
+        {
+          "exerciseId": 9,
+          "order": 2,
+          "sets": [
+            {"type": "warmup", "weight": 22.5, "reps": "10-12", "notes": "Rozgrzewka najszerszych grzbietu"},
+            {"type": "working", "weight": 45, "reps": "10-12", "rpe": 8, "notes": "Chwyt szeroki (nachwyt, 1.5x szerokość barków)"},
+            {"type": "working", "weight": 47.5, "reps": "10-12", "rpe": 8, "notes": "Chwyt wąski (podchwyt, na szerokość barków)"}
+          ]
+        },
+        {
+          "exerciseId": 10,
+          "order": 3,
+          "sets": [
+            {"type": "warmup", "weight": 4.5, "reps": "10", "notes": "Rozgrzewka stawów barkowych"},
+            {"type": "working", "weight": 9, "reps": "10-12", "rpe": 8, "notes": "Plecy oparte, brzuch napięty. Wyciskaj nad głowę."},
+            {"type": "working", "weight": 9, "reps": "10-12", "rpe": 8, "notes": "Staraj się utrzymać ten sam ciężar"}
+          ]
+        },
+        {
+          "exerciseId": 11,
+          "order": 4,
+          "sets": [
+            {"type": "warmup", "weight": 22.5, "reps": "10", "notes": "Przygotowanie do ruchu"},
+            {"type": "working", "weight": 42.5, "reps": "10-12", "rpe": 8, "notes": "Ściągaj łopatki do siebie, klatka wypięta"},
+            {"type": "working", "weight": 42.5, "reps": "10-12", "rpe": 8, "notes": "Wykonaj serię, potem zrób DROPSET"},
+            {"type": "dropset", "weight": 22.5, "reps": "max", "notes": "Bez odpoczynku zdejmij ciężar i rób do upadku"}
+          ]
+        },
+        {
+          "exerciseId": 12,
+          "order": 5,
+          "supersetWith": 13,
+          "sets": [
+            {"type": "warmup", "weight": 10, "reps": "10-12", "notes": "Rozgrzewka łokci (sama sztanga)"},
+            {"type": "working", "weight": 17.5, "reps": "12-15", "rpe": 8, "notes": "Sztanga + 2.5-5kg na stronę. Opuszczaj do czoła/za głowę"},
+            {"type": "working", "weight": 17.5, "reps": "12-15", "rpe": 8, "notes": "Po tej serii od razu przejdź do A2 (Biceps)"}
+          ]
+        },
+        {
+          "exerciseId": 13,
+          "order": 6,
+          "supersetWith": 12,
+          "sets": [
+            {"type": "working", "weight": 16.5, "reps": "12-15", "rpe": 8, "notes": "Sztanga + małe talerze. Łokcie przy ciele."},
+            {"type": "working", "weight": 16.5, "reps": "12-15", "rpe": 8, "notes": "Rób powoli, nie bujaj tułowiem"}
+          ]
+        }
+      ]
+    },
+    {
+      "day": 3,
+      "name": "Lower Body (Dół Ciała)",
+      "exercises": [
+        {
+          "exerciseId": 14,
+          "order": 1,
+          "sets": [
+            {"type": "warmup", "weight": 20, "reps": "10", "notes": "Nauka ruchu: wypychaj biodra mocno w tył"},
+            {"type": "warmup", "weight": 30, "reps": "5", "notes": "Poczuj rozciąganie w tyłach ud"},
+            {"type": "working", "weight": 45, "reps": "10-12", "rpe": 8, "notes": "Plecy proste jak struna. Sztanga blisko nóg."},
+            {"type": "working", "weight": 45, "reps": "10-12", "rpe": 8, "notes": "Skup się na technice, nie na ciężarze"}
+          ]
+        },
+        {
+          "exerciseId": 1,
+          "order": 2,
+          "sets": [
+            {"type": "warmup", "weight": 50, "reps": "10", "notes": "Rozgrzewka"},
+            {"type": "warmup", "weight": 70, "reps": "5", "notes": "Przygotowanie"},
+            {"type": "working", "weight": 95, "reps": "10-12", "rpe": 8, "notes": "Średnie ustawienie stóp. Nie blokuj kolan."},
+            {"type": "working", "weight": 95, "reps": "10-12", "rpe": 8, "notes": "Utrzymaj tempo"},
+            {"type": "working", "weight": 95, "reps": "10-12", "rpe": 9, "notes": "Ostatnia seria może być trudna, walcz!"}
+          ]
+        },
+        {
+          "exerciseId": 15,
+          "order": 3,
+          "sets": [
+            {"type": "warmup", "weight": 20, "reps": "10", "notes": "Rozgrzewka kolan"},
+            {"type": "working", "weight": 35, "reps": "10-12", "rpe": 8, "notes": "Zrób swoje powtórzenia"},
+            {"type": "dropset", "weight": 17.5, "reps": "max", "notes": "Bez przerwy zbij wagę o połowę i rób do palenia mięśni"}
+          ]
+        },
+        {
+          "exerciseId": 16,
+          "order": 4,
+          "supersetWith": 7,
+          "sets": [
+            {"type": "warmup", "weight": 20, "reps": "10", "notes": "Rozgrzewka stawu skokowego"},
+            {"type": "working", "weight": 45, "reps": "12-15", "rpe": 8, "notes": "Pełen zakres: nisko pięta, wysoko palce. Pauza na górze."},
+            {"type": "working", "weight": 45, "reps": "12-15", "rpe": 8, "notes": "Po serii od razu idź na brzuch (A2)"}
+          ]
+        },
+        {
+          "exerciseId": 7,
+          "order": 5,
+          "supersetWith": 16,
+          "sets": [
+            {"type": "working", "weight": 35, "reps": "12-15", "rpe": 8, "notes": "Kontroluj ruch, nie szarp tułowiem"},
+            {"type": "working", "weight": 35, "reps": "12-15", "rpe": 8, "notes": "Ostatnia seria treningu"}
+          ]
+        }
+      ]
+    }
+  ]
+}

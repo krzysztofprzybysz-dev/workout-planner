@@ -1,0 +1,16 @@
+{
+  "name": "workout-planner",
+  "version": "1.0.0",
+  "description": "Adaptive AI Workout Planner based on Jeff Nippard Essentials",
+  "scripts": {
+    "dev": "concurrently \"npm run server\" \"npm run client\"",
+    "server": "cd server && node index.js",
+    "client": "cd client && npm run dev",
+    "seed": "cd server && node db/seed.js",
+    "setup": "npm install && cd client && npm install && cd ../server && npm install"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  }
+}

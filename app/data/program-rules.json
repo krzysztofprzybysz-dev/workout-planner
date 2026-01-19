@@ -1,0 +1,152 @@
+{
+  "exerciseRules": {
+    "Leg Press": {
+      "type": "compound",
+      "progressionStep": 5,
+      "minProgression": 2.5,
+      "notes": "Duzy ruch - mozliwe wieksze skoki ciezaru"
+    },
+    "Incline DB Press": {
+      "type": "compound",
+      "progressionStep": 2,
+      "minProgression": 1,
+      "notes": "Hantle - progresja co 1-2kg"
+    },
+    "Seated Hamstring Curl": {
+      "type": "isolation",
+      "progressionStep": 2.5,
+      "minProgression": 1.25,
+      "notes": "Izolacja - mniejsze skoki"
+    },
+    "T-Bar Row": {
+      "type": "compound",
+      "progressionStep": 2.5,
+      "minProgression": 1.25,
+      "notes": "Zlozony ruch plecow"
+    },
+    "DB Bicep Curl": {
+      "type": "isolation",
+      "progressionStep": 1,
+      "minProgression": 0.5,
+      "notes": "Izolacja bicepsa - male skoki (0.5-1kg)"
+    },
+    "DB Lateral Raise": {
+      "type": "isolation",
+      "progressionStep": 1,
+      "minProgression": 0.5,
+      "notes": "Izolacja barkow - bardzo male skoki"
+    },
+    "Cable Crunch": {
+      "type": "isolation",
+      "progressionStep": 2.5,
+      "minProgression": 1.25,
+      "notes": "Brzuch - umiarkowane skoki"
+    },
+    "Flat DB Press": {
+      "type": "compound",
+      "progressionStep": 2,
+      "minProgression": 1,
+      "notes": "Hantle - progresja co 1-2kg"
+    },
+    "2-Grip Lat Pulldown": {
+      "type": "compound",
+      "progressionStep": 2.5,
+      "minProgression": 1.25,
+      "notes": "Zlozony ruch plecow"
+    },
+    "Seated DB Shoulder Press": {
+      "type": "compound",
+      "progressionStep": 2,
+      "minProgression": 1,
+      "notes": "Hantle - progresja co 1-2kg"
+    },
+    "Seated Cable Row": {
+      "type": "compound",
+      "progressionStep": 2.5,
+      "minProgression": 1.25,
+      "notes": "Zlozony ruch plecow"
+    },
+    "EZ Bar Skull Crusher": {
+      "type": "isolation",
+      "progressionStep": 1.25,
+      "minProgression": 0.5,
+      "notes": "Izolacja tricepsa - male skoki"
+    },
+    "EZ Bar Curl": {
+      "type": "isolation",
+      "progressionStep": 1.25,
+      "minProgression": 0.5,
+      "notes": "Izolacja bicepsa - male skoki"
+    },
+    "Romanian Deadlift": {
+      "type": "compound",
+      "progressionStep": 5,
+      "minProgression": 2.5,
+      "notes": "Duzy ruch - uwazaj na technike"
+    },
+    "Leg Extension": {
+      "type": "isolation",
+      "progressionStep": 2.5,
+      "minProgression": 1.25,
+      "notes": "Izolacja czworoglowych"
+    },
+    "Seated Calf Raise": {
+      "type": "isolation",
+      "progressionStep": 5,
+      "minProgression": 2.5,
+      "notes": "Lydki - mozna wieksze skoki"
+    }
+  },
+  "setTypeRules": {
+    "heavy": {
+      "targetRpe": [8, 9],
+      "reps": "4-6",
+      "progression": {
+        "increase": "Wykonano 6 reps przy RPE <= 8 -> +2.5-5kg",
+        "maintain": "Wykonano 4-5 reps przy RPE 8-9 -> utrzymaj",
+        "decrease": "RPE 10 lub <4 reps -> -5% ciezaru"
+      }
+    },
+    "backoff": {
+      "targetRpe": [8, 9],
+      "reps": "8-10",
+      "percentOfHeavy": "80-85%",
+      "progression": {
+        "increase": "Wykonano 10 reps przy RPE <= 8 -> +2.5kg",
+        "maintain": "RPE 9 -> utrzymaj",
+        "decrease": "Nie wykonano minimum -> zmniejsz"
+      }
+    },
+    "working": {
+      "targetRpe": [9, 10],
+      "reps": "10-12",
+      "progression": {
+        "increase": "Wykonano 12 reps przy RPE <= 9 -> +1-2.5kg (izolacje: +0.5-1kg)",
+        "maintain": "RPE 10 -> utrzymaj",
+        "decrease": "Nie wykonano 10 reps -> zmniejsz o 5%"
+      }
+    },
+    "dropset": {
+      "targetRpe": 10,
+      "reps": "12-15 + drop 50% + max",
+      "progression": {
+        "increase": "Glowna seria >15 reps przy RPE 9 -> +1-2kg",
+        "maintain": "12-15 reps przy RPE 10 -> utrzymaj",
+        "decrease": "<12 reps -> zmniejsz glowny ciazar"
+      }
+    },
+    "warmup": {
+      "targetRpe": [5, 6],
+      "reps": "varies",
+      "progression": {
+        "note": "Rozgrzewka proporcjonalna do ciezaru roboczego"
+      }
+    }
+  },
+  "generalRules": {
+    "philosophy": "Low volume, high intensity - kazda seria musi byc maksymalnie efektywna",
+    "keyPrinciple": "Beating the logbook - kluczem jest progresywne zwiekszanie obciazenia",
+    "quality": "Jakosc > ilosc - lepiej 1 ciezka seria niz 3 przecietne",
+    "progressionFrequency": "Kazdy trening tego samego dnia to szansa na progresje"
+  }
+}
