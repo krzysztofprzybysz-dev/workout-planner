@@ -40,7 +40,10 @@ app.use((req, res, next) => {
 });
 
 // Database connection middleware
-const dbPath = join(__dirname, 'workout.db');
+// Use persistent disk path in production, local path in development
+const dbPath = isProduction
+  ? '/data/workout.db'
+  : join(__dirname, 'workout.db');
 const db = new Database(dbPath);
 db.pragma('journal_mode = WAL');
 

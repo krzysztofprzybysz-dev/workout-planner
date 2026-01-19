@@ -1,0 +1,95 @@
+Role: You are a Senior Product Manager and Lead Architect for a fitness tech startup. Your task is to design and build the core logic for an Adaptive AI Workout Planner.
+
+Business Goal: We are converting a static Excel spreadsheet (Jeff Nippard's Fundamentals) into a dynamic, AI-driven web application. The core value proposition is that the app acts as a personal coach. It doesn't just record history; it calculates the next workout based on the previous performance, RPE (exertion), and user notes.
+
+Input Data: You will be provided with a dataset (CSV/JSON derived from an Excel file) containing a 12-week program structure. This includes exercises, target sets, rep ranges, rest times, and specific techniques (Dropsets, Back-off sets).
+
+THE APPLICATION FLOW & USE CASES
+Please implement the following end-to-end user journey:
+
+PHASE 1: Initialization (The "Onboarding" Flow)
+Why: The Excel sheet has placeholder weights. The app needs the user's actual strength levels to start Week 1 correctly.
+
+Use Case: Upon first launch, the app parses the list of "Compound Movements" (Squat, Bench, Deadlift, Overhead Press) from the plan.
+
+Action: It prompts the user: "What is your current working weight for [Exercise Name] for [X] reps?"
+
+System Logic: Based on these inputs, the system generates the entire Week 1 Plan with calculated weights (e.g., if user inputs 100kg for Squat, the app sets Warm-ups at 50kg/75kg and Working Set at 100kg).
+
+PHASE 2: The Workout Session (The "Gym Mode")
+Why: The user is at the gym, tired, and needs clarity. The UI must reduce cognitive load.
+
+Use Case A: The Intelligent Dashboard
+
+User opens the app and sees only "Today's Workout" (e.g., Week 1 Day 1).
+
+Each exercise is a "Card".
+
+Logic: The app calculates and displays specific weights. It does NOT ask "What weight do you want to use?". It says: "Put 50kg on the bar".
+
+Use Case B: Dynamic Warm-up Calculator
+
+Constraint: The user shouldn't do math.
+
+Logic: If the main set is 100kg, the app automatically inserts checkable rows above it: "Warm-up: 50kg x 10" and "Warm-up: 70kg x 5".
+
+Use Case C: Handling "Back-off Sets"
+
+Scenario: The plan dictates a "Heavy Set" followed by a "Back-off Set".
+
+Logic: The app displays the Heavy Set (e.g., 100kg). Once checked off, the next row automatically calculates a ~10-20% reduction (e.g., displays 85kg) for the Back-off set.
+
+Use Case D: Handling "Dropsets"
+
+Scenario: The plan dictates a Dropset for Biceps.
+
+Logic: The interface groups these sets tightly. It displays the main weight (e.g., 10kg). Immediately below, it displays the drop weight (e.g., 5kg) with a visual indicator that there is NO REST between these inputs.
+
+Use Case E: Data Entry (The Feedback Loop)
+
+For every set, the user sees the "Target" (Read-only) and "Actual" (Editable).
+
+Crucial Input: The RPE Field (1-10 scale). This is the most important data point for the AI to calculate the next session.
+
+Contextual Notes: A text field for specific feedback (e.g., "Shoulder hurt," "Gym was crowded, switched exercise").
+
+PHASE 3: The AI Brain (Post-Workout Analysis)
+Why: This is the core differentiator. We don't just save data; we process it to evolve the plan.
+
+Trigger: User clicks "Finish Workout".
+
+Action: The system packages the session data into a JSON payload and simulates an AI Analyst (or sends to LLM API).
+
+Logic (The "Coach" Algorithm):
+
+RPE Check:
+
+If Actual RPE < Target RPE (e.g., User rated 6, Target was 8) -> Logic: Increase weight by 2.5kg - 5kg for next week.
+
+If Actual RPE > Target RPE (e.g., User rated 10/Failure) -> Logic: Maintain or slightly decrease weight.
+
+Rep Range Check:
+
+If User did more reps than the range (e.g., 15 reps when target was 8-12) -> Logic: Aggressive weight increase.
+
+Substitution Logic (NLP):
+
+If "Notes" contain keywords like "pain", "hurt", "injury" associated with an exercise -> Logic: Look up "Substitution Option 1" from the Excel data and swap the exercise for the next session.
+
+Generation: The system generates a JSON file for the Next Workout and saves it to the state.
+
+PHASE 4: Visualization (Progress & History)
+Why: Motivation and reference.
+
+Use Case: When the user starts the next workout for the same muscle group, the app displays a small badge: "Last time: 90kg x 8 (RPE 9)".
+
+TECHNICAL REQUIREMENTS FOR THE PROTOTYPE
+Data Structure: Create a robust JSON schema that represents the Excel file (Weeks, Days, Exercises, Substitutions, Warm-up protocols).
+
+State Management: The app needs to persist the "Current State" of the user (their calculated maxes and the modified plan).
+
+Simulation Function: Since we might not have a live backend yet, create a function generateNextWorkout(completedWorkoutData) that implements the logic described in Phase 3 using JavaScript conditional logic (as a placeholder for the AI prompt).
+
+UI Framework: React (Functional Components) + Tailwind CSS. Focus on a mobile-first design (large touch targets).
+
+Input Data (The Plan): (Here, I will paste the CSV/JSON data from the Jeff Nippard Excel sheet).
