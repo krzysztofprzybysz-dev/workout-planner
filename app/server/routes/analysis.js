@@ -1,8 +1,75 @@
 import { Router } from 'express';
-import { analyzeWorkout, analyzeWeek } from '../services/claude.js';
+import { analyzeWorkout, analyzeWeek, EXERCISE_SET_CONFIG } from '../services/claude.js';
 import logger from '../services/logger.js';
 
 const router = Router();
+
+// Ćwiczenia powtarzające się w różnych dniach tygodnia
+// exercise_id -> [day1, day2, ...]
+const REPEATING_EXERCISES = {
+  1: [1, 3],  // Leg Press: D1 i D3
+  7: [1, 3],  // Cable Crunch: D1 i D3
+};
+
+/**
+ * Filter AI recommendations to only include set types that exercise actually has
+ * This prevents AI from recommending heavy_weight for D3 Leg Press (which only has working sets)
+ * @param {Object} recommendations - AI recommendations object
+ * @param {number} day - Day number (1, 2, or 3)
+ * @returns {Object} Filtered recommendations
+ */
+function filterRecommendationsBySetConfig(recommendations, day) {
+  const filtered = {};
+
+  for (const [exerciseName, rec] of Object.entries(recommendations)) {
+    const configKey = `${exerciseName}_${day}`;
+    const allowedTypes = EXERCISE_SET_CONFIG[configKey];
+
+    // If we don't have config for this exercise, keep all recommendations
+    if (!allowedTypes) {
+      filtered[exerciseName] = rec;
+      continue;
+    }
+
+    const filteredRec = { ...rec };
+    let removed = [];
+
+    // Remove recommendations for set types that this exercise doesn't have
+    if (!allowedTypes.includes('heavy') && filteredRec.heavy_weight != null) {
+      removed.push(`heavy_weight=${filteredRec.heavy_weight}`);
+      delete filteredRec.heavy_weight;
+    }
+    if (!allowedTypes.includes('backoff') && filteredRec.backoff_weight != null) {
+      removed.push(`backoff_weight=${filteredRec.backoff_weight}`);
+      delete filteredRec.backoff_weight;
+    }
+    if (!allowedTypes.includes('dropset') && filteredRec.dropset_weight != null) {
+      removed.push(`dropset_weight=${filteredRec.dropset_weight}`);
+      delete filteredRec.dropset_weight;
+    }
+
+    if (removed.length > 0) {
+      logger.debug('FILTER', `${exerciseName} D${day}: removed invalid set types: ${removed.join(', ')}`);
+      filteredRec.reason = (filteredRec.reason || '') + ` [Filtered: ${removed.join(', ')} - not valid for D${day}]`;
+    }
+
+    filtered[exerciseName] = filteredRec;
+  }
+
+  return filtered;
+}
+
+/**
+ * Get other days in the week where this exercise appears
+ * @param {number} exerciseId - Exercise ID
+ * @param {number} currentDay - Current workout day (1, 2, or 3)
+ * @returns {number[]} Array of other days where this exercise appears
+ */
+function getOtherDaysForExercise(exerciseId, currentDay) {
+  const days = REPEATING_EXERCISES[exerciseId];
+  if (!days) return [];
+  return days.filter(d => d !== currentDay);
+}
 
 // Analyze completed workout and generate progression
 router.post('/workout/:sessionId', async (req, res) => {
@@ -63,6 +130,11 @@ router.post('/workout/:sessionId', async (req, res) => {
       previousData,
       sessionNotes
     });
+
+    // Filter recommendations to only include valid set types for this day's exercises
+    if (analysis.nextWorkout) {
+      analysis.nextWorkout = filterRecommendationsBySetConfig(analysis.nextWorkout, session.day);
+    }
 
     // Save analysis to session
     db.prepare(`
@@ -156,6 +228,56 @@ router.post('/workout/:sessionId', async (req, res) => {
               working: recommendation.working_weight,
               dropset: recommendation.dropset_weight
             });
+
+            // For repeating exercises: also save recommendations for other days in THIS SAME week
+            const otherDays = getOtherDaysForExercise(exercise.id, session.day);
+            for (const otherDay of otherDays) {
+              // Only if that day hasn't been completed yet in this week
+              const otherDayDone = db.prepare(`
+                SELECT id FROM workout_sessions
+                WHERE week = ? AND day = ? AND finished_at IS NOT NULL
+              `).get(session.week, otherDay);
+
+              if (!otherDayDone) {
+                // Save recommendation for same week, other day
+                deleteProgression.run(exercise.id, session.week, otherDay);
+
+                if (recommendation.heavy_weight != null) {
+                  insertProgression.run(
+                    exercise.id, session.week, otherDay, 'heavy',
+                    recommendation.heavy_weight,
+                    recommendation.reason + ' [Same-week update from D' + session.day + ']'
+                  );
+                }
+                if (recommendation.backoff_weight != null) {
+                  insertProgression.run(
+                    exercise.id, session.week, otherDay, 'backoff',
+                    recommendation.backoff_weight,
+                    recommendation.reason + ' [Same-week update from D' + session.day + ']'
+                  );
+                }
+                if (recommendation.working_weight != null) {
+                  insertProgression.run(
+                    exercise.id, session.week, otherDay, 'working',
+                    recommendation.working_weight,
+                    recommendation.reason + ' [Same-week update from D' + session.day + ']'
+                  );
+                }
+                if (recommendation.dropset_weight != null) {
+                  insertProgression.run(
+                    exercise.id, session.week, otherDay, 'dropset',
+                    recommendation.dropset_weight,
+                    recommendation.reason + ' [Same-week update from D' + session.day + ']'
+                  );
+                }
+                logger.info('PROGRESSION', `Same-week: ${exerciseName} W${session.week}D${otherDay} (from D${session.day})`, {
+                  heavy: recommendation.heavy_weight,
+                  backoff: recommendation.backoff_weight,
+                  working: recommendation.working_weight,
+                  dropset: recommendation.dropset_weight
+                });
+              }
+            }
           } else {
             logger.progression.noData(exerciseName, nextWeek, nextDay);
           }
@@ -215,14 +337,42 @@ router.post('/workout/:sessionId', async (req, res) => {
             LIMIT 150
           `).all(session.week);
 
+          // Collect daily analyses from all sessions this week
+          const dailyAnalyses = weekSessions
+            .filter(s => s.ai_analysis)
+            .map(s => {
+              try {
+                return {
+                  day: s.day,
+                  analysis: JSON.parse(s.ai_analysis)
+                };
+              } catch {
+                return null;
+              }
+            })
+            .filter(Boolean);
+
+          logger.debug('ANALYSIS', `Collected ${dailyAnalyses.length} daily analyses for weekly summary`);
+
           // Call AI for weekly analysis
           weeklyAnalysis = await analyzeWeek({
             week: session.week,
             sessions: weekSessions,
             setLogs: weekSetLogs,
             previousWeeksData,
-            weekNotes
+            weekNotes,
+            dailyAnalyses
           });
+
+          // Filter weekly recommendations by set config for each day
+          if (weeklyAnalysis.nextWeekRecommendations) {
+            for (const [day, exercises] of Object.entries(weeklyAnalysis.nextWeekRecommendations)) {
+              const dayNum = parseInt(day);
+              if (!isNaN(dayNum)) {
+                weeklyAnalysis.nextWeekRecommendations[day] = filterRecommendationsBySetConfig(exercises, dayNum);
+              }
+            }
+          }
 
           // Save weekly analysis
           db.prepare(`

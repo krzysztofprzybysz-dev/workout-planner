@@ -10,6 +10,35 @@ dotenv.config();
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
+// Konfiguracja typów serii per ćwiczenie i dzień
+// Określa DOKŁADNIE jakie typy serii ma dane ćwiczenie w danym dniu
+// Format: 'NazwaCwiczenia_dzień' -> ['typy', 'serii']
+export const EXERCISE_SET_CONFIG = {
+  // Day 1 - Full Body
+  'Leg Press_1': ['heavy', 'backoff'],          // 4-6 reps @ RPE 9 + 8-10 reps @ RPE 8
+  'Incline DB Press_1': ['working'],            // 2x 8-10 reps @ RPE 8
+  'Seated Hamstring Curl_1': ['working'],       // 1x 10-12 reps @ RPE 9
+  'T-Bar Row_1': ['working'],                   // 2x 10-12 reps @ RPE 8
+  'DB Bicep Curl_1': ['working', 'dropset'],    // 1x 10-12 reps @ RPE 9-10 + dropset
+  'DB Lateral Raise_1': ['working', 'dropset'], // 1x 12-15 reps @ RPE 10 + dropset
+  'Cable Crunch_1': ['working', 'dropset'],     // 1x 12-15 reps @ RPE 10 + dropset
+
+  // Day 2 - Upper Body
+  'Flat DB Press_2': ['heavy', 'backoff'],      // 4-6 reps @ RPE 9 + 8-10 reps @ RPE 8
+  '2-Grip Lat Pulldown_2': ['working'],         // 2x 10-12 reps @ RPE 8
+  'Seated DB Shoulder Press_2': ['working'],    // 2x 8-10 reps @ RPE 8
+  'Seated Cable Row_2': ['working', 'dropset'], // 2x 10-12 reps @ RPE 8-9 + dropset
+  'EZ Bar Skull Crusher_2': ['working'],        // 2x 10-12 reps (superset)
+  'EZ Bar Curl_2': ['working'],                 // 2x 8-10 reps (superset)
+
+  // Day 3 - Lower Body
+  'Romanian Deadlift_3': ['working'],           // 2x 10-12 reps @ RPE 8
+  'Leg Press_3': ['working'],                   // 3x 10-12 reps @ RPE 8-9 (BEZ heavy!)
+  'Leg Extension_3': ['working', 'dropset'],    // 1x 10-12 reps @ RPE 9-10 + dropset
+  'Seated Calf Raise_3': ['working'],           // 2x 12-15 reps (superset)
+  'Cable Crunch_3': ['working'],                // 2x 12-15 reps (superset, BEZ dropset!)
+};
+
 // Load program rules
 let programRules = {};
 try {
@@ -61,16 +90,45 @@ UWZGLEDNIJ:
 - Trend progresji (czy ciezary rosna czy stoja w miejscu)
 
 KRYTYCZNE OGRANICZENIA:
-- NIGDY nie zmieniaj ciezaru o wiecej niz 10% w gore lub 15% w dol miedzy tygodniami
+- NIGDY nie zmieniaj ciezaru o wiecej niz 20% w gore lub w dol miedzy tygodniami
 - Back-off ZAWSZE = 75-85% ciezaru heavy
 - Wszystkie ciezary zaokraglaj do 0.5kg (hantle) lub 2.5kg (maszyny/sztangi)
 - Rekomendacje MUSZA byc oparte na rzeczywistych danych z treningu
 - Jesli brak danych - utrzymaj poprzednia wage
 
+TYPY SERII PER CWICZENIE - BARDZO WAZNE:
+Nie wszystkie cwiczenia maja wszystkie typy serii! Rekomenduj TYLKO te typy serii, ktore dane cwiczenie faktycznie ma.
+
+DZIEN 1 (Full Body):
+- Leg Press: heavy (4-6 reps @ RPE 9) + backoff (8-10 reps @ RPE 8)
+- Incline DB Press: 2x working (8-10 reps @ RPE 8)
+- Seated Hamstring Curl: 1x working (10-12 reps @ RPE 9)
+- T-Bar Row: 2x working (10-12 reps @ RPE 8)
+- DB Bicep Curl: working + dropset (10-12 reps @ RPE 9-10)
+- DB Lateral Raise: working + dropset (12-15 reps @ RPE 10)
+- Cable Crunch: working + dropset (12-15 reps @ RPE 10)
+
+DZIEN 2 (Upper Body):
+- Flat DB Press: heavy (4-6 reps @ RPE 9) + backoff (8-10 reps @ RPE 8)
+- 2-Grip Lat Pulldown: 2x working (10-12 reps @ RPE 8)
+- Seated DB Shoulder Press: 2x working (8-10 reps @ RPE 8)
+- Seated Cable Row: 2x working + dropset (10-12 reps @ RPE 8-9)
+- EZ Bar Skull Crusher: 2x working (10-12 reps, superset)
+- EZ Bar Curl: 2x working (8-10 reps, superset)
+
+DZIEN 3 (Lower Body):
+- Romanian Deadlift: 2x working (10-12 reps @ RPE 8)
+- Leg Press: 3x working (10-12 reps @ RPE 8-9) - BEZ heavy! Inny schemat niz D1!
+- Leg Extension: working + dropset (10-12 reps @ RPE 9-10)
+- Seated Calf Raise: 2x working (12-15 reps, superset)
+- Cable Crunch: 2x working (12-15 reps, superset) - BEZ dropset! Inaczej niz D1!
+
 WAZNE:
 - Badz konkretny - podawaj dokladne ciezary
 - Jesli uzytkownik ma notatke o bolu/kontuzji - uwzglednij to w rekomendacji
-- Analizuj trend - jesli ciezary stoja w miejscu, zasugeruj strategie`;
+- Analizuj trend - jesli ciezary stoja w miejscu, zasugeruj strategie
+- Dla D3 Leg Press podaj TYLKO working_weight (nie heavy_weight!)
+- Dla D3 Cable Crunch NIE podawaj dropset_weight!`;
 
 const weeklySystemPrompt = `Jestes trenerem personalnym analizujacym CALY TYDZIEN treningow wedlug programu Jeff Nippard Essentials.
 
@@ -79,21 +137,35 @@ Twoja rola to:
 2. Zidentyfikowac trendy - ktore cwiczenia ida do gory, ktore stoja w miejscu
 3. Zaproponowac strategie na nastepny tydzien
 4. Uwzglednic regeneracje i zmeczenie miedzy dniami
+5. Wykorzystac dzienne analizy AI jako kontekst i punkt wyjscia
 
 STRUKTURA TYGODNIA:
 - Dzien 1: Full Body (compound + izolacja)
 - Dzien 2: Upper Body Focus
 - Dzien 3: Lower Body Focus
 
+CWICZENIA POWTARZAJACE SIE - UWAGA NA ROZNICE W STRUKTURZE:
+- Leg Press w D1: heavy (4-6 reps @ RPE 9) + backoff (8-10 reps @ RPE 8)
+- Leg Press w D3: 3x working (10-12 reps @ RPE 8-9) - ZUPELNIE INNY SCHEMAT! BEZ heavy!
+
+- Cable Crunch w D1: working + dropset (12-15 reps @ RPE 10)
+- Cable Crunch w D3: 2x working (superset, 12-15 reps) - BEZ dropsetu!
+
+Rekomendacje dla W2D1 i W2D3 MUSZA uwzgledniac te roznice:
+- Dla D1 Leg Press: podaj heavy_weight i backoff_weight
+- Dla D3 Leg Press: podaj TYLKO working_weight
+- Dla D1 Cable Crunch: podaj working_weight i dropset_weight
+- Dla D3 Cable Crunch: podaj TYLKO working_weight
+
 ANALIZA POWINNA OBEJMOWAC:
 - Porownanie wynikow z poprzednimi tygodniami
 - Identyfikacja cwiczen wymagajacych uwagi
 - Ocena intensywnosci (srednie RPE)
 - Notatki uzytkownika z calego tygodnia
+- Dzienne analizy AI (mozesz je potwierdzic, zmodyfikowac lub nadpisac)
 
 KRYTYCZNE OGRANICZENIA:
-- Maksymalna progresja: +10% ciezaru tygodniowo
-- Maksymalny regres: -15% ciezaru (przy problemach)
+- Maksymalna zmiana: ±20% ciezaru tygodniowo
 - Wszystkie wagi zaokraglone do 0.5kg lub 2.5kg
 - Rekomendacje MUSZA byc oparte na danych`;
 
@@ -277,12 +349,12 @@ function validateRecommendations(recommendations, currentData) {
 
     const validatedRec = { ...rec };
 
-    // Validate heavy_weight (max ±50% change to allow AI flexibility for significant adjustments)
+    // Validate heavy_weight (max ±20% change - reasonable limit for weekly progression)
     if (rec.heavy_weight !== null && rec.heavy_weight !== undefined) {
-      const maxIncrease = baselineWeight * 1.50;
-      const maxDecrease = baselineWeight * 0.50;
+      const maxIncrease = baselineWeight * 1.20;
+      const maxDecrease = baselineWeight * 0.80;
       if (rec.heavy_weight > maxIncrease || rec.heavy_weight < maxDecrease) {
-        logger.validation.corrected(exerciseName, 'heavy', rec.heavy_weight, baselineWeight, 'outside ±50% bounds');
+        logger.validation.corrected(exerciseName, 'heavy', rec.heavy_weight, baselineWeight, 'outside ±20% bounds');
         validatedRec.heavy_weight = baselineWeight;
         validatedRec.reason = (validatedRec.reason || '') + ' [Skorygowano - zbyt duza zmiana]';
       } else {
@@ -308,14 +380,14 @@ function validateRecommendations(recommendations, currentData) {
       validatedRec.backoff_weight = roundWeight(validatedRec.backoff_weight);
     }
 
-    // Validate working_weight (max ±50% change to allow AI flexibility for significant adjustments)
+    // Validate working_weight (max ±20% change - reasonable limit for weekly progression)
     if (rec.working_weight !== null && rec.working_weight !== undefined) {
       // Use targetWeight as baseline, not actualWeight
       const workingBaseline = workingSet?.targetWeight || workingSet?.actualWeight || baselineWeight;
-      const maxIncrease = workingBaseline * 1.50;
-      const maxDecrease = workingBaseline * 0.50;
+      const maxIncrease = workingBaseline * 1.20;
+      const maxDecrease = workingBaseline * 0.80;
       if (rec.working_weight > maxIncrease || rec.working_weight < maxDecrease) {
-        logger.validation.corrected(exerciseName, 'working', rec.working_weight, workingBaseline, 'outside ±50% bounds');
+        logger.validation.corrected(exerciseName, 'working', rec.working_weight, workingBaseline, 'outside ±20% bounds');
         validatedRec.working_weight = workingBaseline;
         validatedRec.reason = (validatedRec.reason || '') + ' [Skorygowano - zbyt duza zmiana]';
       } else {
@@ -352,8 +424,15 @@ function roundWeight(weight) {
 
 /**
  * Analyze entire week after Day 3 completion
+ * @param {Object} params
+ * @param {number} params.week - Week number
+ * @param {Array} params.sessions - All sessions from this week
+ * @param {Array} params.setLogs - All set logs from this week
+ * @param {Array} params.previousWeeksData - Historical data from previous weeks
+ * @param {string} params.weekNotes - Notes from all sessions this week
+ * @param {Array} params.dailyAnalyses - Daily AI analyses from each session (optional)
  */
-export async function analyzeWeek({ week, sessions, setLogs, previousWeeksData, weekNotes }) {
+export async function analyzeWeek({ week, sessions, setLogs, previousWeeksData, weekNotes, dailyAnalyses = [] }) {
   // Group set logs by day and exercise
   const weekData = {
     day1: {},
@@ -416,7 +495,14 @@ ${Object.keys(weeklyTrends).length > 0 ? JSON.stringify(weeklyTrends, null, 2) :
 NOTATKI Z CALEGO TYGODNIA:
 ${weekNotes || 'Brak notatek'}
 
+DZIENNE ANALIZY AI (wykorzystaj jako kontekst):
+${dailyAnalyses.length > 0
+  ? dailyAnalyses.map(da => `Dzień ${da.day}: ${da.analysis.analysis || 'Brak analizy'}`).join('\n')
+  : 'Brak dziennych analiz'}
+
 Przeanalizuj caly tydzien i zaproponuj strategie na nastepny tydzien.
+Wykorzystaj dzienne analizy jako punkt wyjscia - mozesz je potwierdzic, zmodyfikowac lub nadpisac
+na podstawie pelnego obrazu tygodnia.
 Zwroc TYLKO JSON (bez zadnego tekstu przed ani po):
 {
   "weekSummary": "3-4 zdania podsumowania tygodnia po polsku",
