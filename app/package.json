@@ -7,7 +7,10 @@
     "server": "cd server && node index.js",
     "client": "cd client && npm run dev",
     "seed": "cd server && node db/seed.js",
-    "setup": "npm install && cd client && npm install && cd ../server && npm install"
+    "setup": "npm install && cd client && npm install && cd ../server && npm install",
+    "build": "cd client && npm install && npm run build && cd ../server && npm install",
+    "start": "cd server && NODE_ENV=production node index.js",
+    "postinstall": "npm run build"
   },
   "dependencies": {},
   "devDependencies": {

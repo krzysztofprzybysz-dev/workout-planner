@@ -1,0 +1,14 @@
+services:
+  - type: web
+    name: workout-planner
+    runtime: node
+    region: frankfurt
+    rootDir: app
+    buildCommand: npm run build
+    startCommand: npm run start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: ANTHROPIC_API_KEY
+        sync: false
+    healthCheckPath: /api/health
