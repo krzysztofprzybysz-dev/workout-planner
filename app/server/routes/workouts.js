@@ -3,6 +3,7 @@ import { readFileSync } from 'fs';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import logger from '../services/logger.js';
+import { calculateWarmupWeights } from '../utils/warmupCalculator.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -159,11 +160,34 @@ router.get('/:week/:day', (req, res) => {
     const exerciseInfo = exerciseMap[ex.exerciseId];
     const lastExerciseResults = lastResultsByExercise[ex.exerciseId] || [];
 
+    // Find the primary working weight for this exercise (for warmup calculation)
+    const heavyProgKey = `${ex.exerciseId}-heavy`;
+    const workingProgKey = `${ex.exerciseId}-working`;
+    const heavyProg = progressionMap[heavyProgKey];
+    const workingProg = progressionMap[workingProgKey];
+
+    // Get primary weight from progression or fallback to program weight
+    const heavySet = ex.sets.find(s => s.type === 'heavy');
+    const workingSet = ex.sets.find(s => s.type === 'working');
+    const primaryWeight = heavyProg?.calculated_weight || heavySet?.weight ||
+                         workingProg?.calculated_weight || workingSet?.weight || 0;
+
+    // Calculate dynamic warmup weights based on primary working weight
+    const warmupWeights = calculateWarmupWeights(primaryWeight);
+    let warmupIndex = 0;
+
     const sets = ex.sets.map(set => {
       // Try to get progression weight, fall back to program weight
       const progressionKey = `${ex.exerciseId}-${set.type}`;
       const progression = progressionMap[progressionKey];
-      const targetWeight = progression ? progression.calculated_weight : set.weight;
+      let targetWeight = progression ? progression.calculated_weight : set.weight;
+
+      // For warmup sets, calculate dynamically based on working weight
+      if (set.type === 'warmup') {
+        warmupIndex++;
+        // Use warmup1 (50%) for first warmup, warmup2 (70%) for subsequent
+        targetWeight = warmupIndex === 1 ? warmupWeights.warmup1 : warmupWeights.warmup2;
+      }
 
       // Find last result for this set type
       const lastResult = lastExerciseResults.find(r => r.set_type === set.type);
@@ -240,13 +264,16 @@ router.post('/session/start', (req, res) => {
 router.post('/session/:sessionId/set', (req, res) => {
   const db = req.db;
   const { sessionId } = req.params;
-  const { exerciseId, setNumber, setType, targetWeight, actualWeight, targetReps, actualReps, rpe, notes } = req.body;
+  const { exerciseId, setNumber, setType, targetWeight, actualWeight, targetReps, actualReps, rpe, notes, completedAt } = req.body;
 
   // Validate and ensure numeric values for weight and reps
   const validatedActualWeight = parseFloat(actualWeight) || 0;
   const validatedActualReps = parseInt(actualReps) || 0;
   const validatedTargetWeight = parseFloat(targetWeight) || 0;
   const validatedTargetReps = parseInt(String(targetReps).split('-')[0]) || 0;
+
+  // Use provided timestamp or current time for rest time tracking
+  const timestamp = completedAt || new Date().toISOString();
 
   // Get exercise name for logging
   const exercise = db.prepare('SELECT name FROM exercises WHERE id = ?').get(exerciseId);
@@ -263,16 +290,16 @@ router.post('/session/:sessionId/set', (req, res) => {
     // Update existing set
     result = db.prepare(`
       UPDATE set_logs
-      SET actual_weight = ?, actual_reps = ?, rpe = ?, notes = ?, completed = 1
+      SET actual_weight = ?, actual_reps = ?, rpe = ?, notes = ?, completed = 1, completed_at = ?
       WHERE id = ?
-    `).run(validatedActualWeight, validatedActualReps, rpe, notes, existingSet.id);
+    `).run(validatedActualWeight, validatedActualReps, rpe, notes, timestamp, existingSet.id);
     logger.debug('SET', `Updated set #${setNumber} (${setType}) for ${exerciseName}`);
   } else {
     // Insert new set
     result = db.prepare(`
-      INSERT INTO set_logs (session_id, exercise_id, set_number, set_type, target_weight, actual_weight, target_reps, actual_reps, rpe, notes, completed)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
-    `).run(sessionId, exerciseId, setNumber, setType, validatedTargetWeight, validatedActualWeight, validatedTargetReps, validatedActualReps, rpe, notes);
+      INSERT INTO set_logs (session_id, exercise_id, set_number, set_type, target_weight, actual_weight, target_reps, actual_reps, rpe, notes, completed, completed_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?)
+    `).run(sessionId, exerciseId, setNumber, setType, validatedTargetWeight, validatedActualWeight, validatedTargetReps, validatedActualReps, rpe, notes, timestamp);
   }
 
   logger.set(exerciseName, validatedActualWeight, validatedActualReps, rpe);

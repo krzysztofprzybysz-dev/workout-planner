@@ -1,0 +1,103 @@
+{
+  "rpeScale": {
+    "10": "Maksymalny wysilek (failure) - nie mozna wykonac wiecej powtorzen",
+    "9.5": "Brak RIR, ale mozna by zwiekszyc ciazar",
+    "9": "1 powtorzenie w rezerwie (1 RIR)",
+    "8.5": "Pewne 1 RIR, moze 2",
+    "8": "2 powtorzenia w rezerwie (2 RIR)",
+    "7.5": "Pewne 2 RIR, moze 3",
+    "7": "3 powtorzenia w rezerwie (3 RIR)",
+    "5-6": "4-6 powtorzen w rezerwie",
+    "3-4": "Lekki wysilek",
+    "1-2": "Minimalny wysilek"
+  },
+  "rpeInterpretation": {
+    "targetRpe": "Cel RPE dotyczy OSTATNIEJ serii. Wczesniejsze serie beda latwiejsze.",
+    "example": "Przy 3 seriach z celem RPE 8: seria 1 = ~RPE 6, seria 2 = ~RPE 7, seria 3 = RPE 8",
+    "adjustWeight": "Jesli ciazar jest wyraznie za lekki lub za ciezki - dostosuj w nastepnej serii"
+  },
+  "blockStrategy": {
+    "week1": {
+      "focus": "Ustal baseline",
+      "approach": "Znajdz odpowiednie ciezary, skup sie na formie i technice",
+      "progression": "Nie forsuj - poznaj swoje limity"
+    },
+    "week2": {
+      "focus": "Delikatna progresja",
+      "approach": "Sprobuj dodac 1-2 powtorzenia lub minimalny ciazar",
+      "progression": "Male kroki - lepiej wolniej niz za szybko"
+    },
+    "week3": {
+      "focus": "Kontynuuj progresje",
+      "approach": "Celuj w gorna granice zakresow powtorzen",
+      "progression": "Jesli 12 reps przy RPE 8 - gotowy na +ciazar"
+    },
+    "week4": {
+      "focus": "Peak week / potencjalnie deload",
+      "approach": "Proba maksimum lub zmniejszenie intensywnosci",
+      "progression": "Ocen progresje z calego bloku"
+    }
+  },
+  "autoregulation": {
+    "principle": "Dostosowuj ciezary na podstawie samopoczucia danego dnia",
+    "goodDay": "Czujesz sie silny - mozesz pchac ciezej niz zwykle",
+    "badDay": "Nie czujesz sie najlepiej - uzyj lzejszych ciezarow, ale osiagnij docelowe RPE",
+    "honesty": "Badz szczery ze soba - nie uzywaj autoregulacji jako wymowki do trenowania lekko"
+  },
+  "progressionGuidelines": {
+    "repRange": "Zacznij od dolnej granicy zakresu, dodawaj reps az do gornej",
+    "weightIncrease": "Po osiagnieciu gornej granicy reps - dodaj minimalny ciazar i zacznij od poczatku",
+    "alternativesWhenStuck": [
+      "Poprawa techniki (lepsza kontrola tempa)",
+      "Poprawa polaczenia umysl-miesien (silniejsze napinanie docelowego miesnia)",
+      "Dodanie 0.5-1 reps (partiale na koncu serii)"
+    ],
+    "minimumEffectiveDose": "Nawet 1-4 serie na miesien tygodniowo moga stymulowac mierzalny wzrost"
+  },
+  "deloadTriggers": [
+    "3+ tygodnie bez progresji (brak dodanych reps lub ciezaru)",
+    "Systematyczne RPE 10 (failure) na kazdej serii roboczej",
+    "Powtarzajace sie notatki o bolu lub dyskomforcie",
+    "Znaczny spadek sily (np. -10% ciezaru przez 2+ tygodnie)",
+    "Ogolne zmeczenie, problemy ze snem, brak motywacji"
+  ],
+  "deloadProtocol": {
+    "weightReduction": "-10% do -20% ciezaru we wszystkich cwiczeniach",
+    "rpeTarget": "Celuj w RPE 6-7 zamiast 8-9",
+    "duration": "1 tydzien (zwykle po 4-tygodniowym bloku)",
+    "focus": "Skup sie na technice i regeneracji, nie na progresji",
+    "returnStrategy": "Po deload wrocz do ciezarow z tygodnia 2-3 poprzedniego bloku"
+  },
+  "lightSessionProtocol": {
+    "trigger": "Wykryto zmeczenie/bol w biezacej sesji lub po analizie metryk",
+    "weightReduction": "-10% do -15% ciezaru",
+    "rpeTarget": "RPE 6-7",
+    "duration": "Tylko ta sesja, nie caly tydzien",
+    "returnStrategy": "Nastepna sesja normalnie z pelna intensywnoscia"
+  },
+  "trainingPhilosophy": {
+    "lowVolumeHighIntensity": "Kazda seria musi byc maksymalnie efektywna - jakosc > ilosc",
+    "beatingTheLogbook": "Kluczem jest progresywne zwiekszanie obciazenia w czasie",
+    "qualityOverQuantity": "Lepiej 1 ciezka seria niz 3 przecietne",
+    "timeEfficiency": "45-minutowe treningi sa wystarczajace przy odpowiedniej intensywnosci",
+    "scientificBasis": "Meta-analizy potwierdzaja - nawet <5 serii tygodniowo daje znaczacy wzrost"
+  },
+  "technicalCues": {
+    "heavySets": "Skup sie na sile - kazdy tydzien probuj dodac ciazar lub reps. Utrzymuj forme.",
+    "backoffSets": "Zmniejsz ciazar, skup sie na kontroli negatywu. Plynne, stale tempo.",
+    "workingSets": "Skup sie na polaczeniu umysl-miesien. Napinaj docelowy miesien.",
+    "dropsets": "Glowna seria do failure, drop 50%, max reps bez odpoczynku."
+  },
+  "warningSignals": {
+    "tooHeavy": [
+      "Technika sie psuje (krazenie ciezaru, kompensacje)",
+      "RPE 10 na kazdej serii",
+      "Bol w stawach (nie mylić z pieczenem miesniowym)"
+    ],
+    "tooLight": [
+      "RPE ponizej 7 nawet na ostatniej serii",
+      "Brak progresji mimo pracy na gorze zakresu reps",
+      "Brak pieczebia/pompki w docelowych miesniach"
+    ]
+  }
+}

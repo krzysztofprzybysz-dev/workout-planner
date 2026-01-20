@@ -49,7 +49,8 @@ CREATE TABLE IF NOT EXISTS set_logs (
     actual_reps INTEGER,
     rpe INTEGER,
     notes TEXT,
-    completed BOOLEAN DEFAULT 0
+    completed BOOLEAN DEFAULT 0,
+    completed_at DATETIME -- Timestamp when set was completed (for rest time calculation)
 );
 
 -- Progresja (wyliczone ciężary na następny trening)

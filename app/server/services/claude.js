@@ -49,88 +49,355 @@ try {
   logger.warn('CLAUDE', `Could not load program-rules.json: ${error.message}`);
 }
 
+// Load Jeff Nippard context from jeffpdf
+let jeffContext = {};
+try {
+  const contextPath = join(__dirname, '../../data/jeffpdf-context.json');
+  jeffContext = JSON.parse(readFileSync(contextPath, 'utf-8'));
+  logger.debug('CLAUDE', 'Loaded jeffpdf-context.json');
+} catch (error) {
+  logger.warn('CLAUDE', `Could not load jeffpdf-context.json: ${error.message}`);
+}
+
+// ============= METRIC CALCULATION FUNCTIONS =============
+
+/**
+ * Calculate average RPE from set logs
+ * @param {Array} setLogs - Array of set log objects with rpe property
+ * @returns {number|null} - Average RPE or null if no data
+ */
+function calculateAverageRpe(setLogs) {
+  const rpeValues = setLogs.filter(log => log.rpe != null).map(log => log.rpe);
+  if (rpeValues.length === 0) return null;
+  return (rpeValues.reduce((sum, rpe) => sum + rpe, 0) / rpeValues.length).toFixed(1);
+}
+
+/**
+ * Calculate percentage of sets where actual matched or exceeded target
+ * @param {Array} setLogs - Array of set log objects
+ * @returns {number} - Percentage (0-100)
+ */
+function calculateTargetHitRate(setLogs) {
+  const relevantLogs = setLogs.filter(log => log.target_reps != null && log.actual_reps != null);
+  if (relevantLogs.length === 0) return 100;
+  const hits = relevantLogs.filter(log => log.actual_reps >= log.target_reps).length;
+  return Math.round((hits / relevantLogs.length) * 100);
+}
+
+/**
+ * Calculate weekly volume trend from previous data
+ * @param {Array} previousData - Historical set logs
+ * @returns {object} - Volume trend info
+ */
+function calculateWeeklyVolume(previousData) {
+  if (!previousData || previousData.length === 0) {
+    return { trend: 'brak danych', totalSets: 0 };
+  }
+
+  // Group by week
+  const weeklyVolume = {};
+  for (const log of previousData) {
+    const week = log.week || 'unknown';
+    if (!weeklyVolume[week]) {
+      weeklyVolume[week] = { sets: 0, totalWeight: 0 };
+    }
+    weeklyVolume[week].sets++;
+    weeklyVolume[week].totalWeight += (log.actual_weight || 0) * (log.actual_reps || 0);
+  }
+
+  const weeks = Object.keys(weeklyVolume).sort((a, b) => b - a);
+  if (weeks.length < 2) {
+    return { trend: 'niewystarczajace dane', totalSets: weeklyVolume[weeks[0]]?.sets || 0 };
+  }
+
+  const latestWeek = weeklyVolume[weeks[0]];
+  const previousWeek = weeklyVolume[weeks[1]];
+
+  if (latestWeek.totalWeight > previousWeek.totalWeight * 1.05) {
+    return { trend: 'rosnacy (+5%)', totalSets: latestWeek.sets };
+  } else if (latestWeek.totalWeight < previousWeek.totalWeight * 0.95) {
+    return { trend: 'malejacy (-5%)', totalSets: latestWeek.sets };
+  }
+  return { trend: 'stabilny', totalSets: latestWeek.sets };
+}
+
+/**
+ * Calculate average rest times between sets by set type
+ * @param {Array} setLogs - Array of set log objects with completed_at timestamps
+ * @returns {object} - { heavy: avgSeconds, working: avgSeconds, ... }
+ */
+function calculateRestTimes(setLogs) {
+  if (!setLogs || setLogs.length < 2) {
+    return { average: null, bySetType: {} };
+  }
+
+  // Sort by exercise and then by completed_at
+  const sortedLogs = [...setLogs]
+    .filter(log => log.completed_at)
+    .sort((a, b) => {
+      if (a.exercise_id !== b.exercise_id) return a.exercise_id - b.exercise_id;
+      return new Date(a.completed_at) - new Date(b.completed_at);
+    });
+
+  if (sortedLogs.length < 2) {
+    return { average: null, bySetType: {} };
+  }
+
+  const restTimesByType = {};
+  const allRestTimes = [];
+
+  for (let i = 1; i < sortedLogs.length; i++) {
+    const prevLog = sortedLogs[i - 1];
+    const currentLog = sortedLogs[i];
+
+    // Only calculate rest time for sets of the same exercise
+    if (prevLog.exercise_id !== currentLog.exercise_id) continue;
+
+    const prevTime = new Date(prevLog.completed_at);
+    const currentTime = new Date(currentLog.completed_at);
+    const restSeconds = Math.round((currentTime - prevTime) / 1000);
+
+    // Only count reasonable rest times (30s to 10min)
+    if (restSeconds >= 30 && restSeconds <= 600) {
+      const setType = currentLog.set_type || 'unknown';
+      if (!restTimesByType[setType]) {
+        restTimesByType[setType] = [];
+      }
+      restTimesByType[setType].push(restSeconds);
+      allRestTimes.push(restSeconds);
+    }
+  }
+
+  // Calculate averages
+  const bySetType = {};
+  for (const [type, times] of Object.entries(restTimesByType)) {
+    if (times.length > 0) {
+      bySetType[type] = Math.round(times.reduce((a, b) => a + b, 0) / times.length);
+    }
+  }
+
+  const average = allRestTimes.length > 0
+    ? Math.round(allRestTimes.reduce((a, b) => a + b, 0) / allRestTimes.length)
+    : null;
+
+  return { average, bySetType };
+}
+
+/**
+ * Extract recurring issues from notes across sessions
+ * @param {Array} previousData - Historical data with notes
+ * @returns {Array<string>} - List of recurring issues
+ */
+function extractRecurringIssues(previousData) {
+  const issueKeywords = {
+    'bol': 'Bol/dyskomfort',
+    'boli': 'Bol/dyskomfort',
+    'kolano': 'Problem z kolanem',
+    'plecy': 'Problem z plecami',
+    'bark': 'Problem z barkiem',
+    'nadgarstek': 'Problem z nadgarstkiem',
+    'zmeczenie': 'Zmeczenie',
+    'zmeczony': 'Zmeczenie',
+    'slabo': 'Slaba forma',
+    'technika': 'Problemy z technika',
+    'forma': 'Problemy z forma'
+  };
+
+  const foundIssues = new Set();
+
+  for (const log of previousData) {
+    if (log.notes) {
+      const noteLower = log.notes.toLowerCase();
+      for (const [keyword, issue] of Object.entries(issueKeywords)) {
+        if (noteLower.includes(keyword)) {
+          foundIssues.add(issue);
+        }
+      }
+    }
+  }
+
+  return Array.from(foundIssues);
+}
+
+/**
+ * Determine if a light session (single session with reduced intensity) should be suggested
+ * Based on Jeff Nippard's autoregulation approach - NOT a full week deload
+ * @param {Array} historyData - Historical performance data
+ * @param {object} currentSession - Current session data
+ * @returns {object} - { suggest: boolean, reason: string, severity: string }
+ */
+function shouldSuggestLightSession(historyData, currentSession) {
+  const reasons = [];
+  let severity = 'none';
+
+  if (!historyData || historyData.length < 6) {
+    return { suggest: false, reason: 'Niewystarczajace dane historyczne', severity: 'none' };
+  }
+
+  // Check 1: No progression for 3+ weeks
+  const exerciseProgress = {};
+  for (const log of historyData) {
+    const key = `${log.exercise_name}_${log.set_type}`;
+    if (!exerciseProgress[key]) {
+      exerciseProgress[key] = [];
+    }
+    exerciseProgress[key].push({ week: log.week, weight: log.actual_weight });
+  }
+
+  for (const [key, data] of Object.entries(exerciseProgress)) {
+    const sortedData = data.sort((a, b) => b.week - a.week);
+    if (sortedData.length >= 3) {
+      const weights = sortedData.slice(0, 3).map(d => d.weight);
+      const maxWeight = Math.max(...weights);
+      const minWeight = Math.min(...weights);
+      // If all weights are within 2% of each other for 3 weeks = stagnation
+      if (maxWeight > 0 && (maxWeight - minWeight) / maxWeight < 0.02) {
+        reasons.push(`Stagnacja w ${key.split('_')[0]} przez 3+ tygodnie`);
+        severity = 'moderate';
+      }
+    }
+  }
+
+  // Check 2: Consistent RPE 10 (failure) on all sets
+  const recentLogs = historyData.filter(log => log.week >= (currentSession.week - 1));
+  const rpe10Count = recentLogs.filter(log => log.rpe >= 10).length;
+  const totalRecentLogs = recentLogs.length;
+
+  if (totalRecentLogs >= 5 && rpe10Count / totalRecentLogs > 0.7) {
+    reasons.push('Ponad 70% serii na RPE 10 (failure) w ostatnich 2 tygodniach');
+    severity = 'high';
+  }
+
+  // Check 3: Recurring pain/fatigue notes
+  const recurringIssues = extractRecurringIssues(historyData);
+  if (recurringIssues.some(issue => issue.includes('Bol') || issue.includes('Problem'))) {
+    reasons.push('Powtarzajace sie notatki o bolu/dyskomforcie');
+    severity = severity === 'high' ? 'high' : 'moderate';
+  }
+
+  // Check 4: Significant strength decrease
+  for (const [key, data] of Object.entries(exerciseProgress)) {
+    const sortedData = data.sort((a, b) => b.week - a.week);
+    if (sortedData.length >= 2 && sortedData[0].weight < sortedData[sortedData.length - 1].weight * 0.9) {
+      reasons.push(`Spadek sily o >10% w ${key.split('_')[0]}`);
+      severity = 'high';
+    }
+  }
+
+  return {
+    suggest: reasons.length > 0,
+    reason: reasons.join('; '),
+    severity
+  };
+}
+
 const anthropic = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY
 });
 
-const systemPrompt = `Jestes trenerem personalnym analizujacym trening wedlug programu Jeff Nippard Essentials.
+// Build system prompt dynamically with program rules and Jeff context
+function buildSystemPrompt() {
+  const exerciseRulesText = programRules.exerciseRules
+    ? Object.entries(programRules.exerciseRules)
+        .map(([name, rule]) => `- ${name}: ${rule.type}, krok +${rule.progressionStep}kg (min ${rule.minProgression}kg) - ${rule.notes}`)
+        .join('\n')
+    : 'Brak zaladowanych regul cwiczen';
 
-FILOZOFIA PROGRAMU:
-- Low volume, high intensity - kazda seria musi byc maksymalnie efektywna
+  const setTypeRulesText = programRules.setTypeRules
+    ? Object.entries(programRules.setTypeRules)
+        .map(([type, rules]) => {
+          const prog = rules.progression;
+          return `${type.toUpperCase()}: ${rules.reps} reps @ RPE ${Array.isArray(rules.targetRpe) ? rules.targetRpe.join('-') : rules.targetRpe}
+    - Zwieksz: ${prog?.increase || 'N/A'}
+    - Utrzymaj: ${prog?.maintain || 'N/A'}
+    - Zmniejsz: ${prog?.decrease || 'N/A'}`;
+        })
+        .join('\n\n')
+    : 'Brak zaladowanych regul typow serii';
+
+  const rpeScaleText = jeffContext.rpeScale
+    ? Object.entries(jeffContext.rpeScale)
+        .map(([rpe, desc]) => `RPE ${rpe}: ${desc}`)
+        .join('\n')
+    : 'Standardowa skala RPE 1-10';
+
+  const deloadTriggersText = jeffContext.deloadTriggers
+    ? jeffContext.deloadTriggers.map(t => `- ${t}`).join('\n')
+    : '- Brak progresji przez 3+ tygodnie\n- Systematyczne RPE 10\n- Notatki o bolu';
+
+  return `Jestes trenerem personalnym analizujacym trening wedlug programu Jeff Nippard Essentials.
+
+FILOZOFIA PROGRAMU (z oficjalnego PDF):
+${jeffContext.trainingPhilosophy ? Object.entries(jeffContext.trainingPhilosophy).map(([k, v]) => `- ${v}`).join('\n') : `- Low volume, high intensity - kazda seria musi byc maksymalnie efektywna
 - "Beating the logbook" - kluczem jest progresywne zwiekszanie obciazenia
-- Jakosc > ilosc - lepiej 1 ciezka seria niz 3 przecietne
+- Jakosc > ilosc - lepiej 1 ciezka seria niz 3 przecietne`}
 
-ZASADY PROGRESJI:
-1. Heavy sets (4-6 reps, RPE 8-9):
-   - Wykonano 6 powt. przy RPE <=8 -> +2.5-5kg nastepnym razem
-   - Wykonano 4-5 powt. przy RPE 8-9 -> utrzymaj, celuj w wiecej reps
-   - RPE 10 lub <4 powt. -> -5% ciezaru
+SKALA RPE (Rate of Perceived Exertion):
+${rpeScaleText}
 
-2. Back-off sets (8-10 reps, RPE 8-9):
-   - Zawsze ~80-85% ciezaru z Heavy seta
-   - Wykonano 10 powt. przy RPE <=8 -> +2.5kg
+INTERPRETACJA RPE:
+${jeffContext.rpeInterpretation ? `- ${jeffContext.rpeInterpretation.targetRpe}
+- ${jeffContext.rpeInterpretation.example}
+- ${jeffContext.rpeInterpretation.adjustWeight}` : '- Cel RPE dotyczy OSTATNIEJ serii. Wczesniejsze serie beda latwiejsze.'}
 
-3. Working sets (10-12 reps, RPE 9-10):
-   - Wykonano 12 powt. przy RPE <=9 -> +1-2.5kg
-   - Dla izolacji (biceps, triceps, barki) -> +0.5-1kg
+ZASADY PROGRESJI PER TYP SERII:
+${setTypeRulesText}
 
-4. Dropsets:
-   - Glowna seria: 12-15 reps do RPE 10
-   - Drop: 50% ciezaru, max reps
-   - Progresja gdy glowna seria >15 reps przy RPE 9
+ZASADY PROGRESJI PER CWICZENIE:
+${exerciseRulesText}
 
-TYPY CWICZEN:
-- Compound (Leg Press, DB Press, Row): wieksze skoki (2.5-5kg)
-- Isolation (Curls, Raises, Extensions): mniejsze skoki (0.5-2kg)
-- Hantle: progresja co 1-2kg (dostepne ciezary)
+AUTOREGULACJA:
+${jeffContext.autoregulation ? `- Zasada: ${jeffContext.autoregulation.principle}
+- Dobry dzien: ${jeffContext.autoregulation.goodDay}
+- Slaby dzien: ${jeffContext.autoregulation.badDay}
+- Uczciwosc: ${jeffContext.autoregulation.honesty}` : '- Dostosowuj ciezary na podstawie samopoczucia danego dnia'}
 
-UWZGLEDNIJ:
-- Notatki uzytkownika (bol, zmeczenie, technika)
-- Historie poprzednich treningow
-- Trend progresji (czy ciezary rosna czy stoja w miejscu)
+KIEDY SUGEROWAC LIGHT SESSION (lzejsza sesja):
+${deloadTriggersText}
+
+PROTOKOL LIGHT SESSION (pojedyncza sesja - NIE caly tydzien):
+${jeffContext.lightSessionProtocol ? `- Trigger: ${jeffContext.lightSessionProtocol.trigger}
+- Redukcja ciezaru: ${jeffContext.lightSessionProtocol.weightReduction}
+- Cel RPE: ${jeffContext.lightSessionProtocol.rpeTarget}
+- Czas trwania: ${jeffContext.lightSessionProtocol.duration}
+- Powrot: ${jeffContext.lightSessionProtocol.returnStrategy}` : `- Trigger: Wykryto zmeczenie/bol w biezacej sesji
+- Redukcja: -10% do -15% ciezaru
+- Cel RPE: 6-7
+- Czas: TYLKO ta sesja, nie caly tydzien
+- Powrot: Nastepna sesja normalnie`}
 
 KRYTYCZNE OGRANICZENIA:
-- NIGDY nie zmieniaj ciezaru o wiecej niz 20% w gore lub w dol miedzy tygodniami
+- HARD CAP na zwiekszenie ciezaru: Compound +5kg/tydz, Isolation +2kg/tydz
+- Maksymalny spadek: -20% (tylko dla deload)
 - Back-off ZAWSZE = 75-85% ciezaru heavy
-- Wszystkie ciezary zaokraglaj do 0.5kg (hantle) lub 2.5kg (maszyny/sztangi)
+- Wszystkie ciezary zaokraglaj: <=20kg do 0.5kg, >20kg do 2.5kg
 - Rekomendacje MUSZA byc oparte na rzeczywistych danych z treningu
 - Jesli brak danych - utrzymaj poprzednia wage
 
-TYPY SERII PER CWICZENIE - BARDZO WAZNE:
-Nie wszystkie cwiczenia maja wszystkie typy serii! Rekomenduj TYLKO te typy serii, ktore dane cwiczenie faktycznie ma.
-
-DZIEN 1 (Full Body):
-- Leg Press: heavy (4-6 reps @ RPE 9) + backoff (8-10 reps @ RPE 8)
-- Incline DB Press: 2x working (8-10 reps @ RPE 8)
-- Seated Hamstring Curl: 1x working (10-12 reps @ RPE 9)
-- T-Bar Row: 2x working (10-12 reps @ RPE 8)
-- DB Bicep Curl: working + dropset (10-12 reps @ RPE 9-10)
-- DB Lateral Raise: working + dropset (12-15 reps @ RPE 10)
-- Cable Crunch: working + dropset (12-15 reps @ RPE 10)
-
-DZIEN 2 (Upper Body):
-- Flat DB Press: heavy (4-6 reps @ RPE 9) + backoff (8-10 reps @ RPE 8)
-- 2-Grip Lat Pulldown: 2x working (10-12 reps @ RPE 8)
-- Seated DB Shoulder Press: 2x working (8-10 reps @ RPE 8)
-- Seated Cable Row: 2x working + dropset (10-12 reps @ RPE 8-9)
-- EZ Bar Skull Crusher: 2x working (10-12 reps, superset)
-- EZ Bar Curl: 2x working (8-10 reps, superset)
-
-DZIEN 3 (Lower Body):
-- Romanian Deadlift: 2x working (10-12 reps @ RPE 8)
-- Leg Press: 3x working (10-12 reps @ RPE 8-9) - BEZ heavy! Inny schemat niz D1!
-- Leg Extension: working + dropset (10-12 reps @ RPE 9-10)
-- Seated Calf Raise: 2x working (12-15 reps, superset)
-- Cable Crunch: 2x working (12-15 reps, superset) - BEZ dropset! Inaczej niz D1!
+WAZNE - TYPY SERII:
+- Rekomenduj TYLKO typy serii, ktore cwiczenie faktycznie ma w danym dniu
+- System automatycznie odfiltruje nieprawidlowe rekomendacje
+- Leg Press D1: heavy + backoff | D3: TYLKO working
+- Cable Crunch D1: working + dropset | D3: TYLKO working
 
 WAZNE:
 - Badz konkretny - podawaj dokladne ciezary
 - Jesli uzytkownik ma notatke o bolu/kontuzji - uwzglednij to w rekomendacji
-- Analizuj trend - jesli ciezary stoja w miejscu, zasugeruj strategie
-- Dla D3 Leg Press podaj TYLKO working_weight (nie heavy_weight!)
-- Dla D3 Cable Crunch NIE podawaj dropset_weight!`;
+- Analizuj trend - jesli ciezary stoja w miejscu, zasugeruj strategie lub light session
+- Jesli metryki wskazuja na potrzebe odpoczynku - dodaj to do analizy`;
+}
 
-const weeklySystemPrompt = `Jestes trenerem personalnym analizujacym CALY TYDZIEN treningow wedlug programu Jeff Nippard Essentials.
+const systemPrompt = buildSystemPrompt();
+
+// Build weekly system prompt dynamically
+function buildWeeklySystemPrompt() {
+  const blockStrategyText = jeffContext.blockStrategy
+    ? Object.entries(jeffContext.blockStrategy)
+        .map(([week, data]) => `- ${week.toUpperCase()}: ${data.focus} - ${data.approach}`)
+        .join('\n')
+    : '- WEEK1: Ustal baseline\n- WEEK2: Delikatna progresja\n- WEEK3: Kontynuuj progresje\n- WEEK4: Peak/deload';
+
+  return `Jestes trenerem personalnym analizujacym CALY TYDZIEN treningow wedlug programu Jeff Nippard Essentials.
 
 Twoja rola to:
 1. Podsumowac postepy z calego tygodnia (3 dni treningowe)
@@ -138,6 +405,10 @@ Twoja rola to:
 3. Zaproponowac strategie na nastepny tydzien
 4. Uwzglednic regeneracje i zmeczenie miedzy dniami
 5. Wykorzystac dzienne analizy AI jako kontekst i punkt wyjscia
+6. Ocenic czy potrzebny jest light session na podstawie metryk
+
+STRATEGIA BLOKOWA (4-tygodniowe cykle):
+${blockStrategyText}
 
 STRUKTURA TYGODNIA:
 - Dzien 1: Full Body (compound + izolacja)
@@ -147,15 +418,8 @@ STRUKTURA TYGODNIA:
 CWICZENIA POWTARZAJACE SIE - UWAGA NA ROZNICE W STRUKTURZE:
 - Leg Press w D1: heavy (4-6 reps @ RPE 9) + backoff (8-10 reps @ RPE 8)
 - Leg Press w D3: 3x working (10-12 reps @ RPE 8-9) - ZUPELNIE INNY SCHEMAT! BEZ heavy!
-
 - Cable Crunch w D1: working + dropset (12-15 reps @ RPE 10)
 - Cable Crunch w D3: 2x working (superset, 12-15 reps) - BEZ dropsetu!
-
-Rekomendacje dla W2D1 i W2D3 MUSZA uwzgledniac te roznice:
-- Dla D1 Leg Press: podaj heavy_weight i backoff_weight
-- Dla D3 Leg Press: podaj TYLKO working_weight
-- Dla D1 Cable Crunch: podaj working_weight i dropset_weight
-- Dla D3 Cable Crunch: podaj TYLKO working_weight
 
 ANALIZA POWINNA OBEJMOWAC:
 - Porownanie wynikow z poprzednimi tygodniami
@@ -163,11 +427,28 @@ ANALIZA POWINNA OBEJMOWAC:
 - Ocena intensywnosci (srednie RPE)
 - Notatki uzytkownika z calego tygodnia
 - Dzienne analizy AI (mozesz je potwierdzic, zmodyfikowac lub nadpisac)
+- METRYKI SESJI (srednie RPE, hit rate, trend wolumenu)
+
+KIEDY SUGEROWAC LIGHT SESSION:
+${jeffContext.deloadTriggers ? jeffContext.deloadTriggers.map(t => `- ${t}`).join('\n') : '- Brak progresji przez 3+ tygodnie\n- Systematyczne RPE 10\n- Notatki o bolu'}
+
+PROTOKOL LIGHT SESSION (pojedyncza sesja - NIE caly tydzien):
+${jeffContext.lightSessionProtocol ? `- Redukcja: ${jeffContext.lightSessionProtocol.weightReduction}
+- Cel RPE: ${jeffContext.lightSessionProtocol.rpeTarget}
+- Czas: ${jeffContext.lightSessionProtocol.duration}` : '- Zmniejsz ciazar o 10-15%, celuj w RPE 6-7, tylko ta sesja'}
 
 KRYTYCZNE OGRANICZENIA:
-- Maksymalna zmiana: ±20% ciezaru tygodniowo
-- Wszystkie wagi zaokraglone do 0.5kg lub 2.5kg
-- Rekomendacje MUSZA byc oparte na danych`;
+- HARD CAP na zwiekszenie: Compound +5kg/tydz, Isolation +2kg/tydz
+- Maksymalny spadek: -20% (tylko dla deload)
+- Wszystkie wagi zaokraglone: <=20kg do 0.5kg, >20kg do 2.5kg
+- Rekomendacje MUSZA byc oparte na danych
+- Dla D1 Leg Press: podaj heavy_weight i backoff_weight
+- Dla D3 Leg Press: podaj TYLKO working_weight
+- Dla D1 Cable Crunch: podaj working_weight i dropset_weight
+- Dla D3 Cable Crunch: podaj TYLKO working_weight`;
+}
+
+const weeklySystemPrompt = buildWeeklySystemPrompt();
 
 export async function analyzeWorkout({ session, setLogs, previousData, sessionNotes }) {
   // Group set logs by exercise
@@ -235,11 +516,35 @@ export async function analyzeWorkout({ session, setLogs, previousData, sessionNo
   };
   const dayName = dayNames[session.day] || `Dzien ${session.day}`;
 
+  // Calculate new metrics
+  const avgRpe = calculateAverageRpe(setLogs);
+  const targetHitRate = calculateTargetHitRate(setLogs);
+  const weeklyVolume = calculateWeeklyVolume(previousData);
+  const recurringIssues = extractRecurringIssues(previousData);
+  const deloadCheck = shouldSuggestLightSession(previousData, session);
+  const restTimes = calculateRestTimes(setLogs);
+
+  // Determine block week position (1-4 cycle)
+  const blockWeek = ((session.week - 1) % 4) + 1;
+  const blockStrategy = jeffContext.blockStrategy?.[`week${blockWeek}`];
+
   const userPrompt = `DZISIEJSZY TRENING: Tydzien ${session.week}, Dzien ${session.day} (${dayName})
+POZYCJA W BLOKU: Tydzien ${blockWeek} z 4 ${blockStrategy ? `- ${blockStrategy.focus}` : ''}
 
 WYKONANE CWICZENIA:
 ${JSON.stringify(exerciseData, null, 2)}
 
+METRYKI SESJI:
+- Srednie RPE: ${avgRpe !== null ? avgRpe : 'brak danych'}
+- Procent osiagnietych celow (reps): ${targetHitRate}%
+- Trend wolumenu tygodniowego: ${weeklyVolume.trend}
+- Powtarzajace sie problemy: ${recurringIssues.length > 0 ? recurringIssues.join(', ') : 'Brak'}
+- Czas przerwy: ${restTimes.average ? `sredni ${restTimes.average}s` : 'brak danych'}${Object.keys(restTimes.bySetType).length > 0 ? ` (${Object.entries(restTimes.bySetType).map(([type, sec]) => `${type}: ${sec}s`).join(', ')})` : ''}
+${deloadCheck.suggest ? `
+UWAGA - ROZWAŻ LIGHT SESSION:
+- Powod: ${deloadCheck.reason}
+- Powaga: ${deloadCheck.severity}
+` : ''}
 HISTORIA POPRZEDNICH TRENINGOW (ten sam dzien):
 ${Object.keys(historyData).length > 0 ? JSON.stringify(historyData, null, 2) : 'Brak poprzednich danych - to pierwszy trening tego dnia'}
 
@@ -250,12 +555,14 @@ NOTATKI UZYTKOWNIKA Z TRENINGU:
 ${sessionNotes || 'Brak'}
 
 Przeanalizuj wyniki i zaproponuj ciezary na nastepny trening tego dnia.
+${deloadCheck.suggest ? 'Jesli uznasz light session za uzasadniony, zaproponuj zmniejszone ciezary (-10 do -15%) tylko na ta sesje i dodaj to do analizy.' : ''}
 Zwroc TYLKO JSON (bez zadnego tekstu przed ani po):
 {
   "analysis": "2-3 zdania ogolnej analizy po polsku",
   "exerciseAnalysis": {
     "NazwaCwiczenia": "1 zdanie o tym cwiczeniu"
   },
+  "lightSessionSuggested": boolean,
   "nextWorkout": {
     "NazwaCwiczenia": {
       "heavy_weight": number|null,
@@ -268,7 +575,14 @@ Zwroc TYLKO JSON (bez zadnego tekstu przed ani po):
 }`;
 
   try {
-    logger.claude.calling('daily analysis', { week: session.week, day: session.day, exercises: Object.keys(exerciseData).length });
+    logger.claude.calling('daily analysis', {
+      week: session.week,
+      day: session.day,
+      exercises: Object.keys(exerciseData).length,
+      avgRpe,
+      targetHitRate,
+      deloadSuggested: deloadCheck.suggest
+    });
 
     const startTime = Date.now();
     const message = await anthropic.messages.create({
@@ -320,8 +634,28 @@ Zwroc TYLKO JSON (bez zadnego tekstu przed ani po):
 }
 
 /**
+ * Get maximum weekly weight increase based on exercise type
+ * Compound exercises: max +5kg, Isolation: max +2kg
+ * @param {string} exerciseName - Name of the exercise
+ * @returns {number} - Maximum allowed weekly increase in kg
+ */
+function getMaxWeeklyIncrease(exerciseName) {
+  const rule = programRules.exerciseRules?.[exerciseName];
+  if (!rule) {
+    logger.debug('VALIDATION', `No rule found for ${exerciseName}, using default +5kg cap`);
+    return 5; // default safe cap
+  }
+
+  // Compound: max +5kg, Isolation: max +2kg
+  const maxIncrease = rule.type === 'compound' ? 5 : 2;
+  logger.debug('VALIDATION', `${exerciseName} (${rule.type}): max weekly increase = +${maxIncrease}kg`);
+  return maxIncrease;
+}
+
+/**
  * Validate AI recommendations to prevent hallucinations
- * - Ensures weight changes are within reasonable bounds (±20% of current)
+ * - Uses HARD CAPS for weight increases: compound +5kg, isolation +2kg
+ * - Uses -20% limit for decreases (deload scenarios)
  * - Ensures backoff is 75-90% of heavy weight
  * - Rounds weights to appropriate increments
  */
@@ -349,14 +683,22 @@ function validateRecommendations(recommendations, currentData) {
 
     const validatedRec = { ...rec };
 
-    // Validate heavy_weight (max ±20% change - reasonable limit for weekly progression)
+    // Get max weekly increase based on exercise type (compound vs isolation)
+    const maxAbsoluteIncrease = getMaxWeeklyIncrease(exerciseName);
+
+    // Validate heavy_weight with hard cap
     if (rec.heavy_weight !== null && rec.heavy_weight !== undefined) {
-      const maxIncrease = baselineWeight * 1.20;
-      const maxDecrease = baselineWeight * 0.80;
-      if (rec.heavy_weight > maxIncrease || rec.heavy_weight < maxDecrease) {
-        logger.validation.corrected(exerciseName, 'heavy', rec.heavy_weight, baselineWeight, 'outside ±20% bounds');
-        validatedRec.heavy_weight = baselineWeight;
-        validatedRec.reason = (validatedRec.reason || '') + ' [Skorygowano - zbyt duza zmiana]';
+      const maxIncrease = baselineWeight + maxAbsoluteIncrease;  // Hard cap: +5kg compound, +2kg isolation
+      const maxDecrease = baselineWeight * 0.80;  // -20% for deload scenarios
+
+      if (rec.heavy_weight > maxIncrease) {
+        logger.validation.corrected(exerciseName, 'heavy', rec.heavy_weight, maxIncrease, `exceeds hard cap (+${maxAbsoluteIncrease}kg max)`);
+        validatedRec.heavy_weight = maxIncrease;
+        validatedRec.reason = (validatedRec.reason || '') + ` [Skorygowano z ${rec.heavy_weight}kg - max +${maxAbsoluteIncrease}kg/tydz]`;
+      } else if (rec.heavy_weight < maxDecrease) {
+        logger.validation.corrected(exerciseName, 'heavy', rec.heavy_weight, maxDecrease, 'exceeds -20% deload limit');
+        validatedRec.heavy_weight = maxDecrease;
+        validatedRec.reason = (validatedRec.reason || '') + ' [Skorygowano - max -20% dla deload]';
       } else {
         logger.validation.approved(exerciseName, 'heavy', rec.heavy_weight);
       }
@@ -380,25 +722,42 @@ function validateRecommendations(recommendations, currentData) {
       validatedRec.backoff_weight = roundWeight(validatedRec.backoff_weight);
     }
 
-    // Validate working_weight (max ±20% change - reasonable limit for weekly progression)
+    // Validate working_weight with hard cap
     if (rec.working_weight !== null && rec.working_weight !== undefined) {
       // Use targetWeight as baseline, not actualWeight
       const workingBaseline = workingSet?.targetWeight || workingSet?.actualWeight || baselineWeight;
-      const maxIncrease = workingBaseline * 1.20;
-      const maxDecrease = workingBaseline * 0.80;
-      if (rec.working_weight > maxIncrease || rec.working_weight < maxDecrease) {
-        logger.validation.corrected(exerciseName, 'working', rec.working_weight, workingBaseline, 'outside ±20% bounds');
-        validatedRec.working_weight = workingBaseline;
-        validatedRec.reason = (validatedRec.reason || '') + ' [Skorygowano - zbyt duza zmiana]';
+      const maxIncrease = workingBaseline + maxAbsoluteIncrease;  // Hard cap based on exercise type
+      const maxDecrease = workingBaseline * 0.80;  // -20% for deload scenarios
+
+      if (rec.working_weight > maxIncrease) {
+        logger.validation.corrected(exerciseName, 'working', rec.working_weight, maxIncrease, `exceeds hard cap (+${maxAbsoluteIncrease}kg max)`);
+        validatedRec.working_weight = maxIncrease;
+        validatedRec.reason = (validatedRec.reason || '') + ` [Skorygowano z ${rec.working_weight}kg - max +${maxAbsoluteIncrease}kg/tydz]`;
+      } else if (rec.working_weight < maxDecrease) {
+        logger.validation.corrected(exerciseName, 'working', rec.working_weight, maxDecrease, 'exceeds -20% deload limit');
+        validatedRec.working_weight = maxDecrease;
+        validatedRec.reason = (validatedRec.reason || '') + ' [Skorygowano - max -20% dla deload]';
       } else {
         logger.validation.approved(exerciseName, 'working', rec.working_weight);
       }
       validatedRec.working_weight = roundWeight(validatedRec.working_weight);
     }
 
-    // Validate dropset_weight
+    // Validate dropset_weight with hard cap
     if (rec.dropset_weight !== null && rec.dropset_weight !== undefined) {
-      validatedRec.dropset_weight = roundWeight(rec.dropset_weight);
+      const dropsetBaseline = current.sets.find(s => s.type === 'dropset')?.targetWeight || baselineWeight;
+      const maxIncrease = dropsetBaseline + maxAbsoluteIncrease;
+      const maxDecrease = dropsetBaseline * 0.80;
+
+      if (rec.dropset_weight > maxIncrease) {
+        logger.validation.corrected(exerciseName, 'dropset', rec.dropset_weight, maxIncrease, `exceeds hard cap (+${maxAbsoluteIncrease}kg max)`);
+        validatedRec.dropset_weight = roundWeight(maxIncrease);
+        validatedRec.reason = (validatedRec.reason || '') + ` [Dropset skorygowany - max +${maxAbsoluteIncrease}kg/tydz]`;
+      } else if (rec.dropset_weight < maxDecrease) {
+        validatedRec.dropset_weight = roundWeight(maxDecrease);
+      } else {
+        validatedRec.dropset_weight = roundWeight(rec.dropset_weight);
+      }
     }
 
     validated[exerciseName] = validatedRec;
@@ -478,8 +837,33 @@ export async function analyzeWeek({ week, sessions, setLogs, previousWeeksData, 
     });
   }
 
-  const userPrompt = `ANALIZA TYGODNIA ${week}
+  // Calculate weekly metrics
+  const weeklyAvgRpe = calculateAverageRpe(setLogs);
+  const weeklyTargetHitRate = calculateTargetHitRate(setLogs);
+  const volumeTrend = calculateWeeklyVolume(previousWeeksData);
+  const recurringIssues = extractRecurringIssues([...setLogs, ...previousWeeksData]);
+  const deloadCheck = shouldSuggestLightSession(previousWeeksData, { week });
 
+  // Determine block week position (1-4 cycle)
+  const blockWeek = ((week - 1) % 4) + 1;
+  const nextBlockWeek = blockWeek === 4 ? 1 : blockWeek + 1;
+  const nextBlockStrategy = jeffContext.blockStrategy?.[`week${nextBlockWeek}`];
+
+  const userPrompt = `ANALIZA TYGODNIA ${week}
+POZYCJA W BLOKU: Tydzien ${blockWeek} z 4
+NASTEPNY TYDZIEN BEDZIE: Tydzien ${nextBlockWeek} z 4 ${nextBlockStrategy ? `- ${nextBlockStrategy.focus}` : ''}
+
+METRYKI CALEGO TYGODNIA:
+- Srednie RPE: ${weeklyAvgRpe !== null ? weeklyAvgRpe : 'brak danych'}
+- Procent osiagnietych celow (reps): ${weeklyTargetHitRate}%
+- Trend wolumenu: ${volumeTrend.trend}
+- Powtarzajace sie problemy: ${recurringIssues.length > 0 ? recurringIssues.join(', ') : 'Brak'}
+${deloadCheck.suggest ? `
+UWAGA - ROZWAŻ LIGHT SESSION:
+- Powod: ${deloadCheck.reason}
+- Powaga: ${deloadCheck.severity}
+- Zalecenie: Rozważ zmniejszenie ciezarow o 10-20% w nastepnym tygodniu
+` : ''}
 DZIEN 1 (Full Body):
 ${JSON.stringify(weekData.day1, null, 2)}
 
@@ -503,11 +887,14 @@ ${dailyAnalyses.length > 0
 Przeanalizuj caly tydzien i zaproponuj strategie na nastepny tydzien.
 Wykorzystaj dzienne analizy jako punkt wyjscia - mozesz je potwierdzic, zmodyfikowac lub nadpisac
 na podstawie pelnego obrazu tygodnia.
+${deloadCheck.suggest ? 'WAZNE: Metryki sugeruja potrzebe light session - rozważ zmniejszone ciezary dla nastepnej sesji.' : ''}
+${nextBlockStrategy ? `Pamietaj: Nastepny tydzien to "${nextBlockStrategy.focus}" - ${nextBlockStrategy.approach}` : ''}
 Zwroc TYLKO JSON (bez zadnego tekstu przed ani po):
 {
   "weekSummary": "3-4 zdania podsumowania tygodnia po polsku",
   "strengths": ["mocne strony tego tygodnia"],
   "improvements": ["obszary do poprawy"],
+  "lightSessionSuggested": boolean,
   "nextWeekStrategy": "ogolna strategia na nastepny tydzien",
   "nextWeekRecommendations": {
     "1": {
@@ -529,7 +916,13 @@ Zwroc TYLKO JSON (bez zadnego tekstu przed ani po):
 }`;
 
   try {
-    logger.claude.calling('weekly analysis', { week, sessions: sessions.length });
+    logger.claude.calling('weekly analysis', {
+      week,
+      sessions: sessions.length,
+      avgRpe: weeklyAvgRpe,
+      targetHitRate: weeklyTargetHitRate,
+      deloadSuggested: deloadCheck.suggest
+    });
 
     const startTime = Date.now();
     const message = await anthropic.messages.create({

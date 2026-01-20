@@ -49,6 +49,8 @@ export default function SetRow({
   }, [initialData, targetWeight, isWarmup, parsedTargetReps]);
 
   const handleComplete = () => {
+    const completedAt = new Date().toISOString(); // Timestamp for rest time calculation
+
     if (isWarmup) {
       setCompleted(!completed);
       // Ensure weight and reps are proper numbers for warmup sets
@@ -61,7 +63,8 @@ export default function SetRow({
         rpe: null,
         targetWeight: parsedWeight,
         targetReps: parsedReps,
-        completed: !completed
+        completed: !completed,
+        completedAt
       });
     } else if (weight && reps) {
       setCompleted(true);
@@ -71,7 +74,8 @@ export default function SetRow({
         rpe,
         targetWeight,
         targetReps,
-        completed: true
+        completed: true,
+        completedAt
       });
     }
   };
@@ -164,6 +168,7 @@ export default function SetRow({
                 // Quick complete with default values
                 const parsedWeight = parseFloat(targetWeight) || 0;
                 const parsedReps = parseInt(String(targetReps).split('-')[0]) || 0;
+                const completedAt = new Date().toISOString();
                 setWeight(parsedWeight);
                 setReps(parsedReps);
                 setCompleted(true);
@@ -173,7 +178,8 @@ export default function SetRow({
                   rpe: null,
                   targetWeight: parsedWeight,
                   targetReps: parsedReps,
-                  completed: true
+                  completed: true,
+                  completedAt
                 });
               }}
               className={`flex-1 py-3 rounded-lg font-medium transition-colors ${
@@ -189,6 +195,7 @@ export default function SetRow({
                 onClick={() => {
                   const parsedWeight = parseFloat(weight) || parseFloat(targetWeight) || 0;
                   const parsedReps = parseInt(reps) || parseInt(String(targetReps).split('-')[0]) || 0;
+                  const completedAt = new Date().toISOString();
                   setCompleted(true);
                   onComplete({
                     weight: parsedWeight,
@@ -196,7 +203,8 @@ export default function SetRow({
                     rpe: null,
                     targetWeight: parseFloat(targetWeight) || 0,
                     targetReps: parseInt(String(targetReps).split('-')[0]) || 0,
-                    completed: true
+                    completed: true,
+                    completedAt
                   });
                 }}
                 disabled={!weight && !targetWeight}

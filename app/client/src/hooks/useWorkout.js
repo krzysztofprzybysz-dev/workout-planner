@@ -105,7 +105,8 @@ export function useWorkout() {
           targetReps: data.targetReps,
           actualReps: data.reps,
           rpe: data.rpe,
-          notes: data.notes
+          notes: data.notes,
+          completedAt: data.completedAt // For rest time tracking
         })
       });
     } catch (err) {
