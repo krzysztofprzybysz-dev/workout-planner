@@ -8,6 +8,22 @@ const DAY_NAMES = {
   3: 'Lower Body'
 };
 
+const SET_TYPE_LABELS = {
+  warmup: 'Rozgrzewka',
+  heavy: 'Heavy',
+  backoff: 'Back-off',
+  working: 'Working',
+  dropset: 'Dropset'
+};
+
+const SET_TYPE_COLORS = {
+  warmup: 'border-l-4 border-gray-600 bg-gray-700/50',
+  heavy: 'border-l-4 border-red-600 bg-red-900/30',
+  backoff: 'border-l-4 border-orange-600 bg-orange-900/30',
+  working: 'border-l-4 border-blue-600 bg-blue-900/30',
+  dropset: 'border-l-4 border-purple-600 bg-purple-900/30'
+};
+
 export default function History() {
   const navigate = useNavigate();
   const { sessions, loading, error, resetAllData } = useHistory();
@@ -189,9 +205,9 @@ export default function History() {
                         <h4 className="font-medium text-white mb-2">{exerciseName}</h4>
                         <div className="space-y-1">
                           {logs.map((log, idx) => (
-                            <div key={idx} className="bg-gray-700/50 rounded px-3 py-2 mb-1">
+                            <div key={idx} className={`rounded-r-lg px-3 py-2 mb-1 ${SET_TYPE_COLORS[log.set_type] || 'bg-gray-700/50'}`}>
                               <div className="flex items-center justify-between text-sm">
-                                <span className="text-gray-400 capitalize">{log.set_type}</span>
+                                <span className="text-gray-400">{SET_TYPE_LABELS[log.set_type] || log.set_type}</span>
                                 <span className="text-white">
                                   {log.actual_weight}kg x {log.actual_reps}
                                   {log.rpe && <span className="text-gray-500 ml-2">RPE {log.rpe}</span>}
