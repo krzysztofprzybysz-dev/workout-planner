@@ -11,10 +11,13 @@ export default function ExerciseCard({
   const [expanded, setExpanded] = useState(false);
   const [exerciseNotes, setExerciseNotes] = useState('');
 
-  // Count completed working sets
+  // Count completed working sets (use same setNumber logic as SetRow rendering)
   const workingSets = exercise.sets.filter(s => s.type !== 'warmup');
-  const completedSets = workingSets.filter((set, idx) => {
-    const log = getSetLog(exercise.exerciseId, idx + 1, set.type);
+  const completedSets = workingSets.filter((set) => {
+    // Find original index in full sets array and calculate setNumber consistently
+    const originalIdx = exercise.sets.indexOf(set);
+    const setNumber = exercise.sets.filter((s, i) => s.type !== 'warmup' && i <= originalIdx).length;
+    const log = getSetLog(exercise.exerciseId, setNumber, set.type);
     return log?.completed;
   }).length;
 
@@ -93,6 +96,7 @@ export default function ExerciseCard({
                 targetReps={set.reps}
                 notes={set.notes}
                 lastResult={set.lastResult}
+                progressionReason={set.progressionReason}
                 initialData={existingLog}
                 onComplete={(data) => onSetComplete(exercise.exerciseId, setNumber, set.type, data)}
               />

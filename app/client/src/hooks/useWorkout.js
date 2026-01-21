@@ -82,18 +82,14 @@ export function useWorkout() {
     }
   }, []);
 
-  // Log a set
+  // Log a set - state is updated AFTER successful server save to prevent data loss
   const logSet = useCallback(async (exerciseId, setNumber, setType, data) => {
-    if (!session) return;
+    if (!session) return { success: false, error: 'No active session' };
 
     const key = `${exerciseId}-${setNumber}-${setType}`;
-    setSetLogs(prev => ({
-      ...prev,
-      [key]: { ...data, completed: true }
-    }));
 
     try {
-      await fetch(`${API_BASE}/workouts/session/${session.sessionId}/set`, {
+      const res = await fetch(`${API_BASE}/workouts/session/${session.sessionId}/set`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -109,8 +105,23 @@ export function useWorkout() {
           completedAt: data.completedAt // For rest time tracking
         })
       });
+
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(errorData.error || `Server error: ${res.status}`);
+      }
+
+      // Only update local state AFTER successful server save
+      setSetLogs(prev => ({
+        ...prev,
+        [key]: { ...data, completed: true }
+      }));
+
+      return { success: true };
     } catch (err) {
       console.error('Failed to log set:', err);
+      setError(`Nie udalo sie zapisac serii: ${err.message}`);
+      return { success: false, error: err.message };
     }
   }, [session]);
 
@@ -188,6 +199,7 @@ export function useWorkout() {
     error,
     setLogs,
     fetchWorkout,
+    fetchCurrentState,
     startSession,
     logSet,
     finishSession,

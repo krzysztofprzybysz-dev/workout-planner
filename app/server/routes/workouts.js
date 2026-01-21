@@ -3,12 +3,15 @@ import { readFileSync } from 'fs';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import logger from '../services/logger.js';
-import { calculateWarmupWeights } from '../utils/warmupCalculator.js';
+import { calculateWarmupWeights, getEquipmentType } from '../utils/warmupCalculator.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 const router = Router();
+
+// Program configuration
+const PROGRAM_WEEKS = parseInt(process.env.PROGRAM_WEEKS) || 8;
 
 // Load program data
 const programPath = join(__dirname, '../../data/program.json');
@@ -35,7 +38,7 @@ router.get('/current', (req, res) => {
       currentWeek = lastSession.week;
     } else {
       currentDay = 1;
-      currentWeek = lastSession.week < 8 ? lastSession.week + 1 : 1;
+      currentWeek = lastSession.week < PROGRAM_WEEKS ? lastSession.week + 1 : 1;
     }
   }
 
@@ -62,7 +65,11 @@ router.get('/current', (req, res) => {
 // Get session data - MUST be before /:week/:day to avoid route conflict
 router.get('/session/:sessionId', (req, res) => {
   const db = req.db;
-  const { sessionId } = req.params;
+  const sessionId = parseInt(req.params.sessionId);
+
+  if (!Number.isInteger(sessionId) || sessionId < 1) {
+    return res.status(400).json({ error: 'Invalid sessionId' });
+  }
 
   const session = db.prepare(`
     SELECT * FROM workout_sessions WHERE id = ?
@@ -108,6 +115,10 @@ router.get('/:week/:day', (req, res) => {
     ORDER BY created_at DESC
   `).all(parseInt(week), parseInt(day));
 
+  // Get exercise IDs for parameterized queries
+  const exerciseIds = dayPlan.exercises.map(e => e.exerciseId);
+  const placeholders = exerciseIds.map(() => '?').join(',');
+
   // Get last workout results for these exercises
   const lastResults = db.prepare(`
     SELECT
@@ -122,10 +133,10 @@ router.get('/:week/:day', (req, res) => {
       ws.finished_at
     FROM set_logs sl
     JOIN workout_sessions ws ON sl.session_id = ws.id
-    WHERE sl.exercise_id IN (${dayPlan.exercises.map(e => e.exerciseId).join(',')})
+    WHERE sl.exercise_id IN (${placeholders})
     AND ws.finished_at IS NOT NULL
     ORDER BY ws.finished_at DESC
-  `).all();
+  `).all(...exerciseIds);
 
   // Group last results by exercise
   const lastResultsByExercise = {};
@@ -138,8 +149,8 @@ router.get('/:week/:day', (req, res) => {
 
   // Get exercise details
   const exercises = db.prepare(`
-    SELECT * FROM exercises WHERE id IN (${dayPlan.exercises.map(e => e.exerciseId).join(',')})
-  `).all();
+    SELECT * FROM exercises WHERE id IN (${placeholders})
+  `).all(...exerciseIds);
 
   const exerciseMap = {};
   for (const ex of exercises) {
@@ -172,8 +183,9 @@ router.get('/:week/:day', (req, res) => {
     const primaryWeight = heavyProg?.calculated_weight || heavySet?.weight ||
                          workingProg?.calculated_weight || workingSet?.weight || 0;
 
-    // Calculate dynamic warmup weights based on primary working weight
-    const warmupWeights = calculateWarmupWeights(primaryWeight);
+    // Calculate dynamic warmup weights based on primary working weight and equipment type
+    const equipmentType = getEquipmentType(exerciseInfo.name);
+    const warmupWeights = calculateWarmupWeights(primaryWeight, equipmentType);
     let warmupIndex = 0;
 
     const sets = ex.sets.map(set => {
@@ -233,57 +245,121 @@ router.post('/session/start', (req, res) => {
   const db = req.db;
   const { week, day } = req.body;
 
-  // Check if there's already an active session
-  const activeSession = db.prepare(`
-    SELECT id FROM workout_sessions WHERE finished_at IS NULL
-  `).get();
-
-  if (activeSession) {
-    logger.warn('SESSION', `Cannot start new session - active session #${activeSession.id} exists`);
-    return res.status(400).json({
-      error: 'Active session exists',
-      sessionId: activeSession.id
-    });
+  // Validate week and day
+  const weekNum = parseInt(week);
+  const dayNum = parseInt(day);
+  if (!Number.isInteger(weekNum) || weekNum < 1 || weekNum > 8) {
+    return res.status(400).json({ error: 'Invalid week (must be 1-8)' });
+  }
+  if (!Number.isInteger(dayNum) || dayNum < 1 || dayNum > 3) {
+    return res.status(400).json({ error: 'Invalid day (must be 1-3)' });
   }
 
-  const result = db.prepare(`
-    INSERT INTO workout_sessions (week, day, started_at)
-    VALUES (?, ?, strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
-  `).run(week, day);
+  // Atomic check-and-insert to prevent race conditions
+  const startSession = db.transaction(() => {
+    // Check if there's already an active session
+    const activeSession = db.prepare(`
+      SELECT id FROM workout_sessions WHERE finished_at IS NULL
+    `).get();
 
-  logger.session.start(result.lastInsertRowid, week, day);
+    if (activeSession) {
+      return { error: 'Active session exists', sessionId: activeSession.id };
+    }
 
-  res.json({
-    sessionId: result.lastInsertRowid,
-    week,
-    day
+    const result = db.prepare(`
+      INSERT INTO workout_sessions (week, day, started_at)
+      VALUES (?, ?, strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
+    `).run(weekNum, dayNum);
+
+    return { sessionId: result.lastInsertRowid, week: weekNum, day: dayNum };
   });
+
+  const result = startSession();
+
+  if (result.error) {
+    logger.warn('SESSION', `Cannot start new session - active session #${result.sessionId} exists`);
+    return res.status(400).json(result);
+  }
+
+  logger.session.start(result.sessionId, result.week, result.day);
+  res.json(result);
 });
 
 // Log a set
 router.post('/session/:sessionId/set', (req, res) => {
   const db = req.db;
-  const { sessionId } = req.params;
+  const sessionIdNum = parseInt(req.params.sessionId);
   const { exerciseId, setNumber, setType, targetWeight, actualWeight, targetReps, actualReps, rpe, notes, completedAt } = req.body;
 
-  // Validate and ensure numeric values for weight and reps
-  const validatedActualWeight = parseFloat(actualWeight) || 0;
-  const validatedActualReps = parseInt(actualReps) || 0;
-  const validatedTargetWeight = parseFloat(targetWeight) || 0;
-  const validatedTargetReps = parseInt(String(targetReps).split('-')[0]) || 0;
+  // Validate sessionId
+  if (!Number.isInteger(sessionIdNum) || sessionIdNum < 1) {
+    return res.status(400).json({ error: 'Invalid sessionId' });
+  }
+
+  // Validate required parameters
+  const exerciseIdNum = parseInt(exerciseId);
+  if (!Number.isInteger(exerciseIdNum) || exerciseIdNum < 1) {
+    return res.status(400).json({ error: 'Invalid exerciseId' });
+  }
+
+  const setNumberNum = parseInt(setNumber);
+  if (!Number.isInteger(setNumberNum) || setNumberNum < 1) {
+    return res.status(400).json({ error: 'Invalid setNumber' });
+  }
+
+  const validSetTypes = ['warmup', 'heavy', 'backoff', 'working', 'dropset'];
+  if (!setType || !validSetTypes.includes(setType)) {
+    return res.status(400).json({ error: `Invalid setType. Must be one of: ${validSetTypes.join(', ')}` });
+  }
+
+  // Validate session exists
+  const session = db.prepare('SELECT id FROM workout_sessions WHERE id = ?').get(sessionIdNum);
+  if (!session) {
+    logger.warn('SET', `Session #${sessionIdNum} not found`);
+    return res.status(404).json({ error: 'Session not found' });
+  }
+
+  // Validate and ensure numeric values for weight and reps (with error on invalid)
+  const validatedActualWeight = parseFloat(actualWeight);
+  if (isNaN(validatedActualWeight) || validatedActualWeight < 0) {
+    return res.status(400).json({ error: 'Invalid actualWeight (must be a non-negative number)' });
+  }
+
+  const validatedActualReps = parseInt(actualReps);
+  if (!Number.isInteger(validatedActualReps) || validatedActualReps < 0) {
+    return res.status(400).json({ error: 'Invalid actualReps (must be a non-negative integer)' });
+  }
+
+  // Target values can be 0 or missing (optional)
+  const validatedTargetWeight = targetWeight != null ? parseFloat(targetWeight) : 0;
+  const targetRepsStr = String(targetReps || '0').split('-')[0];
+  const validatedTargetReps = parseInt(targetRepsStr) || 0;
+
+  // Validate RPE if provided (must be 1-10)
+  let validatedRpe = null;
+  if (rpe != null && rpe !== '') {
+    validatedRpe = parseInt(rpe);
+    if (!Number.isInteger(validatedRpe) || validatedRpe < 1 || validatedRpe > 10) {
+      return res.status(400).json({ error: 'Invalid RPE (must be 1-10)' });
+    }
+  }
 
   // Use provided timestamp or current time for rest time tracking
   const timestamp = completedAt || new Date().toISOString();
 
-  // Get exercise name for logging
-  const exercise = db.prepare('SELECT name FROM exercises WHERE id = ?').get(exerciseId);
-  const exerciseName = exercise?.name || `Exercise #${exerciseId}`;
+  // Get exercise name for logging and validate exerciseId exists
+  const exercise = db.prepare('SELECT name FROM exercises WHERE id = ?').get(exerciseIdNum);
+  if (!exercise) {
+    logger.warn('SET', `Exercise #${exerciseIdNum} not found`);
+    return res.status(404).json({ error: 'Exercise not found' });
+  }
+  const exerciseName = exercise.name;
 
   // Check if set already exists
   const existingSet = db.prepare(`
     SELECT id FROM set_logs
     WHERE session_id = ? AND exercise_id = ? AND set_number = ? AND set_type = ?
-  `).get(sessionId, exerciseId, setNumber, setType);
+  `).get(sessionIdNum, exerciseIdNum, setNumberNum, setType);
 
   let result;
   if (existingSet) {
@@ -292,17 +368,17 @@ router.post('/session/:sessionId/set', (req, res) => {
       UPDATE set_logs
       SET actual_weight = ?, actual_reps = ?, rpe = ?, notes = ?, completed = 1, completed_at = ?
       WHERE id = ?
-    `).run(validatedActualWeight, validatedActualReps, rpe, notes, timestamp, existingSet.id);
-    logger.debug('SET', `Updated set #${setNumber} (${setType}) for ${exerciseName}`);
+    `).run(validatedActualWeight, validatedActualReps, validatedRpe, notes, timestamp, existingSet.id);
+    logger.debug('SET', `Updated set #${setNumberNum} (${setType}) for ${exerciseName}`);
   } else {
     // Insert new set
     result = db.prepare(`
       INSERT INTO set_logs (session_id, exercise_id, set_number, set_type, target_weight, actual_weight, target_reps, actual_reps, rpe, notes, completed, completed_at)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?)
-    `).run(sessionId, exerciseId, setNumber, setType, validatedTargetWeight, validatedActualWeight, validatedTargetReps, validatedActualReps, rpe, notes, timestamp);
+    `).run(sessionIdNum, exerciseIdNum, setNumberNum, setType, validatedTargetWeight, validatedActualWeight, validatedTargetReps, validatedActualReps, validatedRpe, notes, timestamp);
   }
 
-  logger.set(exerciseName, validatedActualWeight, validatedActualReps, rpe);
+  logger.set(exerciseName, validatedActualWeight, validatedActualReps, validatedRpe);
 
   res.json({ success: true });
 });
@@ -310,11 +386,19 @@ router.post('/session/:sessionId/set', (req, res) => {
 // Finish a workout session
 router.post('/session/:sessionId/finish', (req, res) => {
   const db = req.db;
-  const { sessionId } = req.params;
+  const sessionId = parseInt(req.params.sessionId);
   const { notes } = req.body;
 
-  // Get session start time to calculate duration
+  if (!Number.isInteger(sessionId) || sessionId < 1) {
+    return res.status(400).json({ error: 'Invalid sessionId' });
+  }
+
+  // Validate session exists
   const session = db.prepare('SELECT started_at FROM workout_sessions WHERE id = ?').get(sessionId);
+  if (!session) {
+    logger.warn('SESSION', `Cannot finish - session #${sessionId} not found`);
+    return res.status(404).json({ error: 'Session not found' });
+  }
 
   db.prepare(`
     UPDATE workout_sessions
@@ -341,8 +425,12 @@ router.post('/session/:sessionId/finish', (req, res) => {
 // Get workout history
 router.get('/history', (req, res) => {
   const db = req.db;
-  const limit = parseInt(req.query.limit) || 20;
-  const offset = parseInt(req.query.offset) || 0;
+  let limit = parseInt(req.query.limit) || 20;
+  let offset = parseInt(req.query.offset) || 0;
+
+  // Validate and sanitize limit/offset
+  limit = Math.max(1, Math.min(100, limit));   // 1-100
+  offset = Math.max(0, offset);                 // >= 0
 
   const sessions = db.prepare(`
     SELECT
@@ -389,33 +477,38 @@ router.post('/reset', (req, res) => {
   const db = req.db;
 
   try {
-    // 1. Delete all user workout data
-    db.prepare('DELETE FROM set_logs').run();
-    db.prepare('DELETE FROM workout_sessions').run();
-    db.prepare('DELETE FROM progression').run();
+    // Atomic transaction - all or nothing
+    const resetTransaction = db.transaction(() => {
+      // 1. Delete all user workout data
+      db.prepare('DELETE FROM set_logs').run();
+      db.prepare('DELETE FROM workout_sessions').run();
+      db.prepare('DELETE FROM progression').run();
 
-    // 2. Reseed progression for Week 1 with default weights from program.json
-    const insertProgression = db.prepare(`
-      INSERT INTO progression (exercise_id, week, day, set_type, calculated_weight, reason, created_at)
-      VALUES (?, ?, ?, ?, ?, ?, datetime('now'))
-    `);
+      // 2. Reseed progression for Week 1 with default weights from program.json
+      const insertProgression = db.prepare(`
+        INSERT INTO progression (exercise_id, week, day, set_type, calculated_weight, reason, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, datetime('now'))
+      `);
 
-    for (const dayPlan of program.workoutDays) {
-      for (const exercise of dayPlan.exercises) {
-        for (const set of exercise.sets) {
-          if (set.type !== 'warmup') {
-            insertProgression.run(
-              exercise.exerciseId,
-              1,
-              dayPlan.day,
-              set.type,
-              set.weight,
-              'Reset - początkowy ciężar z programu'
-            );
+      for (const dayPlan of program.workoutDays) {
+        for (const exercise of dayPlan.exercises) {
+          for (const set of exercise.sets) {
+            if (set.type !== 'warmup') {
+              insertProgression.run(
+                exercise.exerciseId,
+                1,
+                dayPlan.day,
+                set.type,
+                set.weight,
+                'Reset - początkowy ciężar z programu'
+              );
+            }
           }
         }
       }
-    }
+    });
+
+    resetTransaction();
 
     logger.info('RESET', 'All workout data cleared, W1 progressions reseeded');
     res.json({ success: true, message: 'Reset to W1D1 completed' });

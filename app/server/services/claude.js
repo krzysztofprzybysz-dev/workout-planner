@@ -4,6 +4,7 @@ import { readFileSync } from 'fs';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import logger from './logger.js';
+import { roundWeightByExercise } from '../utils/warmupCalculator.js';
 
 dotenv.config();
 
@@ -21,7 +22,7 @@ export const EXERCISE_SET_CONFIG = {
   'T-Bar Row_1': ['working'],                   // 2x 10-12 reps @ RPE 8
   'DB Bicep Curl_1': ['working', 'dropset'],    // 1x 10-12 reps @ RPE 9-10 + dropset
   'DB Lateral Raise_1': ['working', 'dropset'], // 1x 12-15 reps @ RPE 10 + dropset
-  'Cable Crunch_1': ['working', 'dropset'],     // 1x 12-15 reps @ RPE 10 + dropset
+  'Machine Crunch_1': ['working', 'dropset'],    // 1x 12-15 reps @ RPE 10 + dropset
 
   // Day 2 - Upper Body
   'Flat DB Press_2': ['heavy', 'backoff'],      // 4-6 reps @ RPE 9 + 8-10 reps @ RPE 8
@@ -30,13 +31,14 @@ export const EXERCISE_SET_CONFIG = {
   'Seated Cable Row_2': ['working', 'dropset'], // 2x 10-12 reps @ RPE 8-9 + dropset
   'EZ Bar Skull Crusher_2': ['working'],        // 2x 10-12 reps (superset)
   'EZ Bar Curl_2': ['working'],                 // 2x 8-10 reps (superset)
+  'Machine Crunch_2': ['working', 'dropset'],   // 1x 12-15 reps @ RPE 8 + dropset
 
   // Day 3 - Lower Body
   'Romanian Deadlift_3': ['working'],           // 2x 10-12 reps @ RPE 8
   'Leg Press_3': ['working'],                   // 3x 10-12 reps @ RPE 8-9 (BEZ heavy!)
   'Leg Extension_3': ['working', 'dropset'],    // 1x 10-12 reps @ RPE 9-10 + dropset
   'Seated Calf Raise_3': ['working'],           // 2x 12-15 reps (superset)
-  'Cable Crunch_3': ['working'],                // 2x 12-15 reps (superset, BEZ dropset!)
+  'Machine Crunch_3': ['working'],               // 2x 12-15 reps (superset, BEZ dropset!)
 };
 
 // Load program rules
@@ -57,6 +59,39 @@ try {
   logger.debug('CLAUDE', 'Loaded jeffpdf-context.json');
 } catch (error) {
   logger.warn('CLAUDE', `Could not load jeffpdf-context.json: ${error.message}`);
+}
+
+// ============= UTILITY FUNCTIONS =============
+
+/**
+ * Sanitize user input to prevent prompt injection
+ * - Removes potential instruction-like patterns
+ * - Limits length to prevent context overflow
+ * - Escapes special formatting characters
+ * @param {string} input - Raw user input
+ * @param {number} maxLength - Maximum allowed length (default 500)
+ * @returns {string} - Sanitized input
+ */
+function sanitizeUserInput(input, maxLength = 500) {
+  if (!input || typeof input !== 'string') return '';
+
+  let sanitized = input
+    // Remove potential system/assistant role markers
+    .replace(/\b(system|assistant|human|user):\s*/gi, '')
+    // Remove XML-like tags that could be interpreted as instructions
+    .replace(/<\/?[^>]+>/g, '')
+    // Remove potential JSON injection
+    .replace(/[{}[\]]/g, '')
+    // Normalize whitespace
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  // Limit length
+  if (sanitized.length > maxLength) {
+    sanitized = sanitized.substring(0, maxLength) + '...';
+  }
+
+  return sanitized;
 }
 
 // ============= METRIC CALCULATION FUNCTIONS =============
@@ -370,7 +405,8 @@ KRYTYCZNE OGRANICZENIA:
 - HARD CAP na zwiekszenie ciezaru: Compound +5kg/tydz, Isolation +2kg/tydz
 - Maksymalny spadek: -20% (tylko dla deload)
 - Back-off ZAWSZE = 75-85% ciezaru heavy
-- Wszystkie ciezary zaokraglaj: <=20kg do 0.5kg, >20kg do 2.5kg
+- Wszystkie ciezary zaokraglaj do pelnych kilogramow (brak polowek na silowni)
+- Hantle: minimum 4kg, inkrementacja co 1kg (4, 5, 6, 7, 8...)
 - Rekomendacje MUSZA byc oparte na rzeczywistych danych z treningu
 - Jesli brak danych - utrzymaj poprzednia wage
 
@@ -378,7 +414,7 @@ WAZNE - TYPY SERII:
 - Rekomenduj TYLKO typy serii, ktore cwiczenie faktycznie ma w danym dniu
 - System automatycznie odfiltruje nieprawidlowe rekomendacje
 - Leg Press D1: heavy + backoff | D3: TYLKO working
-- Cable Crunch D1: working + dropset | D3: TYLKO working
+- Machine Crunch D1: working + dropset | D2: working + dropset | D3: TYLKO working
 
 WAZNE:
 - Badz konkretny - podawaj dokladne ciezary
@@ -418,8 +454,9 @@ STRUKTURA TYGODNIA:
 CWICZENIA POWTARZAJACE SIE - UWAGA NA ROZNICE W STRUKTURZE:
 - Leg Press w D1: heavy (4-6 reps @ RPE 9) + backoff (8-10 reps @ RPE 8)
 - Leg Press w D3: 3x working (10-12 reps @ RPE 8-9) - ZUPELNIE INNY SCHEMAT! BEZ heavy!
-- Cable Crunch w D1: working + dropset (12-15 reps @ RPE 10)
-- Cable Crunch w D3: 2x working (superset, 12-15 reps) - BEZ dropsetu!
+- Machine Crunch w D1: working + dropset (12-15 reps @ RPE 10)
+- Machine Crunch w D2: working + dropset (12-15 reps @ RPE 8)
+- Machine Crunch w D3: 2x working (superset, 12-15 reps) - BEZ dropsetu!
 
 ANALIZA POWINNA OBEJMOWAC:
 - Porownanie wynikow z poprzednimi tygodniami
@@ -440,12 +477,13 @@ ${jeffContext.lightSessionProtocol ? `- Redukcja: ${jeffContext.lightSessionProt
 KRYTYCZNE OGRANICZENIA:
 - HARD CAP na zwiekszenie: Compound +5kg/tydz, Isolation +2kg/tydz
 - Maksymalny spadek: -20% (tylko dla deload)
-- Wszystkie wagi zaokraglone: <=20kg do 0.5kg, >20kg do 2.5kg
+- Wszystkie ciezary zaokraglaj do pelnych kilogramow (brak polowek na silowni)
+- Hantle: minimum 4kg, inkrementacja co 1kg (4, 5, 6, 7, 8...)
 - Rekomendacje MUSZA byc oparte na danych
 - Dla D1 Leg Press: podaj heavy_weight i backoff_weight
 - Dla D3 Leg Press: podaj TYLKO working_weight
-- Dla D1 Cable Crunch: podaj working_weight i dropset_weight
-- Dla D3 Cable Crunch: podaj TYLKO working_weight`;
+- Dla D1 Machine Crunch: podaj working_weight i dropset_weight
+- Dla D3 Machine Crunch: podaj TYLKO working_weight`;
 }
 
 const weeklySystemPrompt = buildWeeklySystemPrompt();
@@ -493,8 +531,10 @@ export async function analyzeWorkout({ session, setLogs, previousData, sessionNo
   const trends = {};
   for (const [exerciseName, history] of Object.entries(historyData)) {
     if (history.length >= 2) {
-      // Get heavy/working sets only for trend analysis
-      const workingSets = history.filter(h => h.setType === 'heavy' || h.setType === 'working');
+      // Get heavy/working sets only for trend analysis, sorted by date descending
+      const workingSets = history
+        .filter(h => h.setType === 'heavy' || h.setType === 'working')
+        .sort((a, b) => new Date(b.date) - new Date(a.date));
       if (workingSets.length >= 2) {
         const latest = workingSets[0]?.weight || 0;
         const previous = workingSets[workingSets.length - 1]?.weight || 0;
@@ -528,8 +568,19 @@ export async function analyzeWorkout({ session, setLogs, previousData, sessionNo
   const blockWeek = ((session.week - 1) % 4) + 1;
   const blockStrategy = jeffContext.blockStrategy?.[`week${blockWeek}`];
 
+  // Build list of valid exercises and their set types for this day
+  const validExercisesForDay = Object.keys(exerciseData).map(name => {
+    const configKey = `${name}_${session.day}`;
+    const allowedTypes = EXERCISE_SET_CONFIG[configKey] || ['working'];
+    return `- ${name}: ${allowedTypes.join(', ')}`;
+  }).join('\n');
+
   const userPrompt = `DZISIEJSZY TRENING: Tydzien ${session.week}, Dzien ${session.day} (${dayName})
 POZYCJA W BLOKU: Tydzien ${blockWeek} z 4 ${blockStrategy ? `- ${blockStrategy.focus}` : ''}
+
+WAZNE - DOZWOLONE CWICZENIA I ICH TYPY SERII DLA TEGO DNIA:
+${validExercisesForDay}
+Rekomenduj TYLKO te cwiczenia i TYLKO wymienione typy serii. Nie dodawaj innych.
 
 WYKONANE CWICZENIA:
 ${JSON.stringify(exerciseData, null, 2)}
@@ -552,7 +603,7 @@ TRENDY PROGRESJI:
 ${Object.keys(trends).length > 0 ? JSON.stringify(trends, null, 2) : 'Brak wystarczajacych danych do analizy trendu'}
 
 NOTATKI UZYTKOWNIKA Z TRENINGU:
-${sessionNotes || 'Brak'}
+${sanitizeUserInput(sessionNotes) || 'Brak'}
 
 Przeanalizuj wyniki i zaproponuj ciezary na nastepny trening tego dnia.
 ${deloadCheck.suggest ? 'Jesli uznasz light session za uzasadniony, zaproponuj zmniejszone ciezary (-10 do -15%) tylko na ta sesje i dodaj to do analizy.' : ''}
@@ -585,8 +636,9 @@ Zwroc TYLKO JSON (bez zadnego tekstu przed ani po):
     });
 
     const startTime = Date.now();
+    const API_TIMEOUT_MS = parseInt(process.env.CLAUDE_TIMEOUT_MS) || 60000; // 60s default
     const message = await anthropic.messages.create({
-      model: 'claude-sonnet-4-20250514',
+      model: process.env.CLAUDE_MODEL || 'claude-sonnet-4-20250514',
       max_tokens: 2000,
       temperature: 0.3, // Lower temperature for more consistent, data-driven recommendations
       messages: [
@@ -596,6 +648,8 @@ Zwroc TYLKO JSON (bez zadnego tekstu przed ani po):
         }
       ],
       system: systemPrompt
+    }, {
+      timeout: API_TIMEOUT_MS
     });
 
     const duration = ((Date.now() - startTime) / 1000).toFixed(1);
@@ -612,23 +666,65 @@ Zwroc TYLKO JSON (bez zadnego tekstu przed ani po):
       throw new Error('No valid JSON in response');
     }
 
-    const result = JSON.parse(jsonMatch[0]);
+    let result;
+    try {
+      result = JSON.parse(jsonMatch[0]);
+    } catch (parseError) {
+      logger.claude.parsing(false, `JSON parse error: ${parseError.message}`);
+      throw new Error(`Invalid JSON in response: ${parseError.message}`);
+    }
+
+    // Validate JSON structure
+    if (result.nextWorkout !== undefined && typeof result.nextWorkout !== 'object') {
+      logger.claude.parsing(false, `Invalid nextWorkout structure: expected object, got ${typeof result.nextWorkout}`);
+      result.nextWorkout = {};
+    }
+    if (result.nextWorkout && typeof result.nextWorkout === 'object') {
+      // Validate each exercise recommendation is an object with weight fields
+      for (const [exerciseName, rec] of Object.entries(result.nextWorkout)) {
+        if (typeof rec !== 'object' || rec === null) {
+          logger.warn('CLAUDE', `Invalid recommendation for ${exerciseName}: expected object, got ${typeof rec}`);
+          delete result.nextWorkout[exerciseName];
+        }
+      }
+    }
+
     logger.claude.parsing(true, { exercises: Object.keys(result.nextWorkout || {}).length });
 
     // Validate and sanitize AI recommendations
     if (result.nextWorkout) {
-      result.nextWorkout = validateRecommendations(result.nextWorkout, exerciseData);
+      result.nextWorkout = validateRecommendations(result.nextWorkout, exerciseData, session.day);
     }
 
     return result;
   } catch (error) {
     logger.claude.error(error, { function: 'analyzeWorkout', week: session.week, day: session.day });
 
+    // Build fallback with previous weights from exerciseData
+    const fallbackNextWorkout = {};
+    for (const [exerciseName, data] of Object.entries(exerciseData)) {
+      const rec = { reason: 'Fallback - utrzymaj poprzednie ciezary (blad AI)' };
+      for (const set of data.sets) {
+        const weight = set.actualWeight || set.targetWeight;
+        if (weight && weight > 0) {
+          if (set.type === 'heavy') rec.heavy_weight = weight;
+          else if (set.type === 'backoff') rec.backoff_weight = weight;
+          else if (set.type === 'working') rec.working_weight = weight;
+          else if (set.type === 'dropset') rec.dropset_weight = weight;
+        }
+      }
+      if (Object.keys(rec).length > 1) {
+        fallbackNextWorkout[exerciseName] = rec;
+      }
+    }
+
+    logger.warn('CLAUDE', `API failed - returning fallback with ${Object.keys(fallbackNextWorkout).length} exercises`);
+
     // Return a fallback analysis if API fails
     return {
       analysis: 'Nie udalo sie uzyskac analizy AI. Utrzymaj obecne ciezary i sprobuj ponownie nastepnym razem.',
       exerciseAnalysis: {},
-      nextWorkout: {}
+      nextWorkout: fallbackNextWorkout
     };
   }
 }
@@ -646,9 +742,10 @@ function getMaxWeeklyIncrease(exerciseName) {
     return 5; // default safe cap
   }
 
-  // Compound: max +5kg, Isolation: max +2kg
-  const maxIncrease = rule.type === 'compound' ? 5 : 2;
-  logger.debug('VALIDATION', `${exerciseName} (${rule.type}): max weekly increase = +${maxIncrease}kg`);
+  // Use progressionStep from rules if available, otherwise fallback to type-based defaults
+  // progressionStep is the recommended step, we use it as the max increase
+  const maxIncrease = rule.progressionStep || (rule.type === 'compound' ? 5 : 2);
+  logger.debug('VALIDATION', `${exerciseName} (${rule.type}): max weekly increase = +${maxIncrease}kg (progressionStep: ${rule.progressionStep || 'default'})`);
   return maxIncrease;
 }
 
@@ -658,11 +755,51 @@ function getMaxWeeklyIncrease(exerciseName) {
  * - Uses -20% limit for decreases (deload scenarios)
  * - Ensures backoff is 75-90% of heavy weight
  * - Rounds weights to appropriate increments
+ * - Filters out set types not allowed for the exercise on the given day
+ * @param {Object} recommendations - AI recommendations keyed by exercise name
+ * @param {Object} currentData - Current exercise data
+ * @param {number} [day] - Optional day number (1, 2, or 3) for SET_CONFIG validation
  */
-function validateRecommendations(recommendations, currentData) {
+function validateRecommendations(recommendations, currentData, day = null) {
   const validated = {};
 
   for (const [exerciseName, rec] of Object.entries(recommendations)) {
+    // If day is provided, filter out set types not allowed for this exercise on this day
+    if (day !== null) {
+      const configKey = `${exerciseName}_${day}`;
+      const allowedTypes = EXERCISE_SET_CONFIG[configKey];
+
+      if (allowedTypes) {
+        const removedTypes = [];
+        // Create a copy to modify
+        const filteredRec = { ...rec };
+
+        if (!allowedTypes.includes('heavy') && rec.heavy_weight != null) {
+          removedTypes.push(`heavy_weight=${rec.heavy_weight}`);
+          delete filteredRec.heavy_weight;
+        }
+        if (!allowedTypes.includes('backoff') && rec.backoff_weight != null) {
+          removedTypes.push(`backoff_weight=${rec.backoff_weight}`);
+          delete filteredRec.backoff_weight;
+        }
+        if (!allowedTypes.includes('working') && rec.working_weight != null) {
+          removedTypes.push(`working_weight=${rec.working_weight}`);
+          delete filteredRec.working_weight;
+        }
+        if (!allowedTypes.includes('dropset') && rec.dropset_weight != null) {
+          removedTypes.push(`dropset_weight=${rec.dropset_weight}`);
+          delete filteredRec.dropset_weight;
+        }
+
+        if (removedTypes.length > 0) {
+          logger.warn('VALIDATION', `AI hallucination: ${exerciseName} D${day} - removed invalid set types: ${removedTypes.join(', ')}`);
+          filteredRec.reason = (filteredRec.reason || '') + ` [Filtered: ${removedTypes.join(', ')} - not valid for D${day}]`;
+        }
+
+        // Use filtered rec for further validation
+        Object.assign(rec, filteredRec);
+      }
+    }
     const current = currentData[exerciseName];
     if (!current) {
       validated[exerciseName] = rec;
@@ -670,14 +807,34 @@ function validateRecommendations(recommendations, currentData) {
     }
 
     // Get the current heavy/working weight as baseline
-    // IMPORTANT: Use targetWeight (program goal) as baseline, not actualWeight (what user lifted)
-    // This allows AI to suggest appropriate reductions when user struggles with the target weight
+    // Use actualWeight as baseline - what user actually lifted is the true baseline
+    // Fall back to targetWeight only if no actual data
     const heavySet = current.sets.find(s => s.type === 'heavy');
     const workingSet = current.sets.find(s => s.type === 'working');
-    const baselineWeight = heavySet?.targetWeight || workingSet?.targetWeight || heavySet?.actualWeight || workingSet?.actualWeight || 0;
+    const baselineWeight = heavySet?.actualWeight || workingSet?.actualWeight || heavySet?.targetWeight || workingSet?.targetWeight || 0;
 
+    // Even with zero baseline, still validate and round weights
     if (baselineWeight === 0) {
-      validated[exerciseName] = rec;
+      logger.warn('VALIDATION', `${exerciseName}: Zero baseline - applying minimum validation`);
+      const validatedRec = { ...rec };
+      // Apply Number conversion, rounding and ensure non-negative for all weight types
+      if (rec.heavy_weight != null) {
+        const val = Number(rec.heavy_weight);
+        validatedRec.heavy_weight = isNaN(val) ? null : Math.max(0, roundWeightByExercise(val, exerciseName));
+      }
+      if (rec.backoff_weight != null) {
+        const val = Number(rec.backoff_weight);
+        validatedRec.backoff_weight = isNaN(val) ? null : Math.max(0, roundWeightByExercise(val, exerciseName));
+      }
+      if (rec.working_weight != null) {
+        const val = Number(rec.working_weight);
+        validatedRec.working_weight = isNaN(val) ? null : Math.max(0, roundWeightByExercise(val, exerciseName));
+      }
+      if (rec.dropset_weight != null) {
+        const val = Number(rec.dropset_weight);
+        validatedRec.dropset_weight = isNaN(val) ? null : Math.max(0, roundWeightByExercise(val, exerciseName));
+      }
+      validated[exerciseName] = validatedRec;
       continue;
     }
 
@@ -686,99 +843,104 @@ function validateRecommendations(recommendations, currentData) {
     // Get max weekly increase based on exercise type (compound vs isolation)
     const maxAbsoluteIncrease = getMaxWeeklyIncrease(exerciseName);
 
+    // Convert all weight values to Numbers to prevent string comparison bugs
+    const heavyWeightNum = rec.heavy_weight != null ? Number(rec.heavy_weight) : null;
+    const backoffWeightNum = rec.backoff_weight != null ? Number(rec.backoff_weight) : null;
+    const workingWeightNum = rec.working_weight != null ? Number(rec.working_weight) : null;
+    const dropsetWeightNum = rec.dropset_weight != null ? Number(rec.dropset_weight) : null;
+
     // Validate heavy_weight with hard cap
-    if (rec.heavy_weight !== null && rec.heavy_weight !== undefined) {
+    if (heavyWeightNum !== null && !isNaN(heavyWeightNum)) {
       const maxIncrease = baselineWeight + maxAbsoluteIncrease;  // Hard cap: +5kg compound, +2kg isolation
       const maxDecrease = baselineWeight * 0.80;  // -20% for deload scenarios
 
-      if (rec.heavy_weight > maxIncrease) {
-        logger.validation.corrected(exerciseName, 'heavy', rec.heavy_weight, maxIncrease, `exceeds hard cap (+${maxAbsoluteIncrease}kg max)`);
+      if (heavyWeightNum > maxIncrease) {
+        logger.validation.corrected(exerciseName, 'heavy', heavyWeightNum, maxIncrease, `exceeds hard cap (+${maxAbsoluteIncrease}kg max)`);
         validatedRec.heavy_weight = maxIncrease;
-        validatedRec.reason = (validatedRec.reason || '') + ` [Skorygowano z ${rec.heavy_weight}kg - max +${maxAbsoluteIncrease}kg/tydz]`;
-      } else if (rec.heavy_weight < maxDecrease) {
-        logger.validation.corrected(exerciseName, 'heavy', rec.heavy_weight, maxDecrease, 'exceeds -20% deload limit');
+        validatedRec.reason = (validatedRec.reason || '') + ` [Skorygowano z ${heavyWeightNum}kg - max +${maxAbsoluteIncrease}kg/tydz]`;
+      } else if (heavyWeightNum < maxDecrease) {
+        logger.validation.corrected(exerciseName, 'heavy', heavyWeightNum, maxDecrease, 'exceeds -20% deload limit');
         validatedRec.heavy_weight = maxDecrease;
         validatedRec.reason = (validatedRec.reason || '') + ' [Skorygowano - max -20% dla deload]';
       } else {
-        logger.validation.approved(exerciseName, 'heavy', rec.heavy_weight);
+        validatedRec.heavy_weight = heavyWeightNum;
+        logger.validation.approved(exerciseName, 'heavy', heavyWeightNum);
       }
-      validatedRec.heavy_weight = roundWeight(validatedRec.heavy_weight);
+      // Ensure non-negative after rounding
+      validatedRec.heavy_weight = Math.max(0, roundWeightByExercise(validatedRec.heavy_weight, exerciseName));
     }
 
-    // Validate backoff_weight (should be 75-90% of heavy)
-    if (rec.backoff_weight !== null && rec.backoff_weight !== undefined) {
+    // Validate backoff_weight (should be 80-85% of heavy per program-rules.json)
+    if (backoffWeightNum !== null && !isNaN(backoffWeightNum)) {
       const heavyWeight = validatedRec.heavy_weight || baselineWeight;
-      const expectedBackoffMin = heavyWeight * 0.75;
-      const expectedBackoffMax = heavyWeight * 0.90;
+      const expectedBackoffMin = heavyWeight * 0.80;  // 80% per program-rules
+      const expectedBackoffMax = heavyWeight * 0.85;  // 85% per program-rules
 
-      if (rec.backoff_weight < expectedBackoffMin || rec.backoff_weight > expectedBackoffMax) {
-        const correctedWeight = roundWeight(heavyWeight * 0.80);
-        logger.validation.corrected(exerciseName, 'backoff', rec.backoff_weight, correctedWeight, 'corrected to 80% of heavy');
+      if (backoffWeightNum < expectedBackoffMin || backoffWeightNum > expectedBackoffMax) {
+        // Correct to 82.5% (middle of 80-85% range), without pre-rounding
+        const correctedWeight = heavyWeight * 0.825;
+        logger.validation.corrected(exerciseName, 'backoff', backoffWeightNum, correctedWeight, 'corrected to 82.5% of heavy (80-85% range)');
         validatedRec.backoff_weight = correctedWeight;
-        validatedRec.reason = (validatedRec.reason || '') + ' [Backoff skorygowany do 80% heavy]';
+        validatedRec.reason = (validatedRec.reason || '') + ' [Backoff skorygowany do 82.5% heavy]';
       } else {
-        logger.validation.approved(exerciseName, 'backoff', rec.backoff_weight);
+        validatedRec.backoff_weight = backoffWeightNum;
+        logger.validation.approved(exerciseName, 'backoff', backoffWeightNum);
       }
-      validatedRec.backoff_weight = roundWeight(validatedRec.backoff_weight);
+      // Round only once at the end, ensure non-negative
+      validatedRec.backoff_weight = Math.max(0, roundWeightByExercise(validatedRec.backoff_weight, exerciseName));
     }
 
     // Validate working_weight with hard cap
-    if (rec.working_weight !== null && rec.working_weight !== undefined) {
-      // Use targetWeight as baseline, not actualWeight
-      const workingBaseline = workingSet?.targetWeight || workingSet?.actualWeight || baselineWeight;
+    if (workingWeightNum !== null && !isNaN(workingWeightNum)) {
+      // Use actualWeight as baseline - what user actually lifted
+      const workingBaseline = workingSet?.actualWeight || workingSet?.targetWeight || baselineWeight;
       const maxIncrease = workingBaseline + maxAbsoluteIncrease;  // Hard cap based on exercise type
       const maxDecrease = workingBaseline * 0.80;  // -20% for deload scenarios
 
-      if (rec.working_weight > maxIncrease) {
-        logger.validation.corrected(exerciseName, 'working', rec.working_weight, maxIncrease, `exceeds hard cap (+${maxAbsoluteIncrease}kg max)`);
+      if (workingWeightNum > maxIncrease) {
+        logger.validation.corrected(exerciseName, 'working', workingWeightNum, maxIncrease, `exceeds hard cap (+${maxAbsoluteIncrease}kg max)`);
         validatedRec.working_weight = maxIncrease;
-        validatedRec.reason = (validatedRec.reason || '') + ` [Skorygowano z ${rec.working_weight}kg - max +${maxAbsoluteIncrease}kg/tydz]`;
-      } else if (rec.working_weight < maxDecrease) {
-        logger.validation.corrected(exerciseName, 'working', rec.working_weight, maxDecrease, 'exceeds -20% deload limit');
+        validatedRec.reason = (validatedRec.reason || '') + ` [Skorygowano z ${workingWeightNum}kg - max +${maxAbsoluteIncrease}kg/tydz]`;
+      } else if (workingWeightNum < maxDecrease) {
+        logger.validation.corrected(exerciseName, 'working', workingWeightNum, maxDecrease, 'exceeds -20% deload limit');
         validatedRec.working_weight = maxDecrease;
         validatedRec.reason = (validatedRec.reason || '') + ' [Skorygowano - max -20% dla deload]';
       } else {
-        logger.validation.approved(exerciseName, 'working', rec.working_weight);
+        validatedRec.working_weight = workingWeightNum;
+        logger.validation.approved(exerciseName, 'working', workingWeightNum);
       }
-      validatedRec.working_weight = roundWeight(validatedRec.working_weight);
+      // Ensure non-negative after rounding
+      validatedRec.working_weight = Math.max(0, roundWeightByExercise(validatedRec.working_weight, exerciseName));
     }
 
     // Validate dropset_weight with hard cap
-    if (rec.dropset_weight !== null && rec.dropset_weight !== undefined) {
-      const dropsetBaseline = current.sets.find(s => s.type === 'dropset')?.targetWeight || baselineWeight;
+    if (dropsetWeightNum !== null && !isNaN(dropsetWeightNum)) {
+      // Use actualWeight as baseline for dropset (consistent with heavy/working)
+      const dropsetSet = current.sets.find(s => s.type === 'dropset');
+      const dropsetBaseline = dropsetSet?.actualWeight || dropsetSet?.targetWeight || baselineWeight;
       const maxIncrease = dropsetBaseline + maxAbsoluteIncrease;
       const maxDecrease = dropsetBaseline * 0.80;
 
-      if (rec.dropset_weight > maxIncrease) {
-        logger.validation.corrected(exerciseName, 'dropset', rec.dropset_weight, maxIncrease, `exceeds hard cap (+${maxAbsoluteIncrease}kg max)`);
-        validatedRec.dropset_weight = roundWeight(maxIncrease);
+      if (dropsetWeightNum > maxIncrease) {
+        logger.validation.corrected(exerciseName, 'dropset', dropsetWeightNum, maxIncrease, `exceeds hard cap (+${maxAbsoluteIncrease}kg max)`);
+        validatedRec.dropset_weight = maxIncrease;
         validatedRec.reason = (validatedRec.reason || '') + ` [Dropset skorygowany - max +${maxAbsoluteIncrease}kg/tydz]`;
-      } else if (rec.dropset_weight < maxDecrease) {
-        validatedRec.dropset_weight = roundWeight(maxDecrease);
+      } else if (dropsetWeightNum < maxDecrease) {
+        logger.validation.corrected(exerciseName, 'dropset', dropsetWeightNum, maxDecrease, 'exceeds -20% deload limit');
+        validatedRec.dropset_weight = maxDecrease;
+        validatedRec.reason = (validatedRec.reason || '') + ' [Dropset skorygowany - max -20% dla deload]';
       } else {
-        validatedRec.dropset_weight = roundWeight(rec.dropset_weight);
+        validatedRec.dropset_weight = dropsetWeightNum;
+        logger.validation.approved(exerciseName, 'dropset', dropsetWeightNum);
       }
+      // Ensure non-negative after rounding (round only once at end)
+      validatedRec.dropset_weight = Math.max(0, roundWeightByExercise(validatedRec.dropset_weight, exerciseName));
     }
 
     validated[exerciseName] = validatedRec;
   }
 
   return validated;
-}
-
-/**
- * Round weight to appropriate increment
- * - Dumbbells: 0.5kg increments
- * - Machines/Barbells: 2.5kg increments
- */
-function roundWeight(weight) {
-  if (weight <= 20) {
-    // Likely dumbbells or small weights - round to 0.5kg
-    return Math.round(weight * 2) / 2;
-  } else {
-    // Larger weights - round to 2.5kg
-    return Math.round(weight / 2.5) * 2.5;
-  }
 }
 
 /**
@@ -877,7 +1039,7 @@ HISTORIA POPRZEDNICH TYGODNI:
 ${Object.keys(weeklyTrends).length > 0 ? JSON.stringify(weeklyTrends, null, 2) : 'Brak danych z poprzednich tygodni'}
 
 NOTATKI Z CALEGO TYGODNIA:
-${weekNotes || 'Brak notatek'}
+${sanitizeUserInput(weekNotes, 1000) || 'Brak notatek'}
 
 DZIENNE ANALIZY AI (wykorzystaj jako kontekst):
 ${dailyAnalyses.length > 0
@@ -925,8 +1087,9 @@ Zwroc TYLKO JSON (bez zadnego tekstu przed ani po):
     });
 
     const startTime = Date.now();
+    const API_TIMEOUT_MS = parseInt(process.env.CLAUDE_TIMEOUT_MS) || 60000; // 60s default
     const message = await anthropic.messages.create({
-      model: 'claude-sonnet-4-20250514',
+      model: process.env.CLAUDE_MODEL || 'claude-sonnet-4-20250514',
       max_tokens: 4000,
       temperature: 0.3,
       messages: [
@@ -936,6 +1099,8 @@ Zwroc TYLKO JSON (bez zadnego tekstu przed ani po):
         }
       ],
       system: weeklySystemPrompt
+    }, {
+      timeout: API_TIMEOUT_MS
     });
 
     const duration = ((Date.now() - startTime) / 1000).toFixed(1);
@@ -949,15 +1114,34 @@ Zwroc TYLKO JSON (bez zadnego tekstu przed ani po):
       throw new Error('No valid JSON in weekly analysis response');
     }
 
-    const result = JSON.parse(jsonMatch[0]);
+    let result;
+    try {
+      result = JSON.parse(jsonMatch[0]);
+    } catch (parseError) {
+      logger.claude.parsing(false, `JSON parse error: ${parseError.message}`);
+      throw new Error(`Invalid JSON in weekly response: ${parseError.message}`);
+    }
     logger.claude.parsing(true, { days: Object.keys(result.nextWeekRecommendations || {}).length });
 
     // Validate recommendations for each day
+    // Handle both "1" and "day1" formats from AI
     if (result.nextWeekRecommendations) {
+      const normalizedRecommendations = {};
       for (const [day, exercises] of Object.entries(result.nextWeekRecommendations)) {
-        const dayData = weekData[`day${day}`] || {};
-        result.nextWeekRecommendations[day] = validateRecommendations(exercises, dayData);
+        // Extract numeric day from formats like "1", "day1", "Day1", etc.
+        const dayMatch = String(day).match(/(\d+)/);
+        const dayNum = dayMatch ? parseInt(dayMatch[1]) : null;
+
+        if (dayNum === null || dayNum < 1 || dayNum > 3) {
+          logger.warn('CLAUDE', `Weekly analysis: Skipping invalid day key "${day}"`);
+          continue;
+        }
+
+        const dayKey = String(dayNum);  // Normalize to "1", "2", "3"
+        const dayData = weekData[`day${dayNum}`] || {};
+        normalizedRecommendations[dayKey] = validateRecommendations(exercises, dayData, dayNum);
       }
+      result.nextWeekRecommendations = normalizedRecommendations;
     }
 
     logger.info('CLAUDE', `Weekly analysis complete for W${week}`);

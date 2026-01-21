@@ -7,26 +7,31 @@ export default function Progress() {
   const [history, setHistory] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  // Ladowanie cwiczen
+  // Ladowanie cwiczen - use Promise.allSettled to handle partial failures
   useEffect(() => {
     const loadExercises = async () => {
       try {
-        const allRes = await Promise.all([
-          fetch('/api/workouts/1/1'),
-          fetch('/api/workouts/1/2'),
-          fetch('/api/workouts/1/3')
+        const results = await Promise.allSettled([
+          fetch('/api/workouts/1/1').then(r => r.ok ? r.json() : Promise.reject(new Error(`Day 1: ${r.status}`))),
+          fetch('/api/workouts/1/2').then(r => r.ok ? r.json() : Promise.reject(new Error(`Day 2: ${r.status}`))),
+          fetch('/api/workouts/1/3').then(r => r.ok ? r.json() : Promise.reject(new Error(`Day 3: ${r.status}`)))
         ]);
-        const allData = await Promise.all(allRes.map(r => r.json()));
+
         const uniqueExercises = new Map();
-        for (const dayData of allData) {
-          for (const ex of dayData.exercises) {
-            if (!uniqueExercises.has(ex.exerciseId)) {
-              uniqueExercises.set(ex.exerciseId, {
-                id: ex.exerciseId,
-                name: ex.name,
-                muscleGroup: ex.muscleGroup
-              });
+        for (const result of results) {
+          if (result.status === 'fulfilled') {
+            const dayData = result.value;
+            for (const ex of dayData.exercises || []) {
+              if (!uniqueExercises.has(ex.exerciseId)) {
+                uniqueExercises.set(ex.exerciseId, {
+                  id: ex.exerciseId,
+                  name: ex.name,
+                  muscleGroup: ex.muscleGroup
+                });
+              }
             }
+          } else {
+            console.warn('Failed to load exercises for one day:', result.reason);
           }
         }
         setExercises(Array.from(uniqueExercises.values()));
@@ -40,17 +45,29 @@ export default function Progress() {
   }, []);
 
   useEffect(() => {
-    if (!selectedExercise) return;
+    if (!selectedExercise) {
+      setHistory([]);
+      return;
+    }
+
+    const abortController = new AbortController();
     const loadHistory = async () => {
       try {
-        const res = await fetch(`/api/workouts/exercise/${selectedExercise}/history`);
+        const res = await fetch(`/api/workouts/exercise/${selectedExercise}/history`, {
+          signal: abortController.signal
+        });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const data = await res.json();
         setHistory(data);
       } catch (err) {
-        console.error('Failed to load history:', err);
+        if (err.name !== 'AbortError') {
+          console.error('Failed to load history:', err);
+        }
       }
     };
     loadHistory();
+
+    return () => abortController.abort();
   }, [selectedExercise]);
 
   // Grupowanie po dacie

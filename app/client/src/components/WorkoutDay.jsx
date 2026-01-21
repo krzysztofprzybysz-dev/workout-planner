@@ -23,8 +23,8 @@ export default function WorkoutDay({
   const completedWorkingSets = workout.exercises.reduce((acc, ex) => {
     const workingSets = ex.sets.filter(s => s.type !== 'warmup');
     const completed = workingSets.filter((set, idx) => {
-      const setNumber = ex.sets.filter((s, i) => s.type !== 'warmup' && i <= ex.sets.indexOf(set)).length;
-      const log = getSetLog(ex.exerciseId, setNumber, set.type);
+      // Use idx + 1 as setNumber (consistent with ExerciseCard)
+      const log = getSetLog(ex.exerciseId, idx + 1, set.type);
       return log?.completed;
     }).length;
     return acc + completed;

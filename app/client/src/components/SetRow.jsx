@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 
 const SET_TYPE_LABELS = {
   warmup: 'Rozgrzewka',
@@ -23,14 +23,16 @@ export default function SetRow({
   targetReps,
   notes,
   lastResult,
+  progressionReason,
   onComplete,
-  initialData,
-  isActive
+  initialData
 }) {
   const isWarmup = setType === 'warmup';
 
-  // Parse target reps (handle ranges like "8-10" by taking first number)
-  const parsedTargetReps = parseInt(String(targetReps).split('-')[0]) || 0;
+  // Memoize parsed target reps to avoid unnecessary re-renders
+  const parsedTargetReps = useMemo(() => {
+    return parseInt(String(targetReps).split('-')[0]) || 0;
+  }, [targetReps]);
 
   const [weight, setWeight] = useState(initialData?.weight ?? targetWeight ?? '');
   const [reps, setReps] = useState(initialData?.reps ?? (isWarmup ? parsedTargetReps : '') ?? '');
@@ -105,9 +107,16 @@ export default function SetRow({
             </span>
           )}
         </div>
-        <span className="text-xs text-gray-500">
-          Cel: {targetWeight}kg x {targetReps}
-        </span>
+        <div className="text-right">
+          <span className="text-xs text-gray-500">
+            Cel: {targetWeight}kg x {targetReps}
+          </span>
+          {progressionReason && (
+            <p className="text-xs text-primary-400/70 mt-0.5 max-w-[200px] truncate" title={progressionReason}>
+              AI: {progressionReason}
+            </p>
+          )}
+        </div>
       </div>
 
       {isWarmup ? (
@@ -118,20 +127,23 @@ export default function SetRow({
             <button
               onClick={() => handleWeightChange(-2.5)}
               className="w-10 h-10 rounded-lg bg-gray-700 hover:bg-gray-600 active:bg-gray-500 flex items-center justify-center text-xl font-bold"
+              aria-label="Zmniejsz ciężar"
             >
               -
             </button>
             <input
               type="number"
               value={weight}
-              onChange={(e) => setWeight(e.target.value)}
+              onChange={(e) => setWeight(e.target.value === '' ? '' : parseFloat(e.target.value) || 0)}
               className="input-field w-20 text-center"
               step="0.5"
+              aria-label="Ciężar w kilogramach"
             />
             <span className="text-gray-400">kg</span>
             <button
               onClick={() => handleWeightChange(2.5)}
               className="w-10 h-10 rounded-lg bg-gray-700 hover:bg-gray-600 active:bg-gray-500 flex items-center justify-center text-xl font-bold"
+              aria-label="Zwiększ ciężar"
             >
               +
             </button>
@@ -143,19 +155,22 @@ export default function SetRow({
             <button
               onClick={() => handleRepsChange(-1)}
               className="w-10 h-10 rounded-lg bg-gray-700 hover:bg-gray-600 active:bg-gray-500 flex items-center justify-center text-xl font-bold"
+              aria-label="Zmniejsz powtórzenia"
             >
               -
             </button>
             <input
               type="number"
+              aria-label="Liczba powtórzeń"
               value={reps}
-              onChange={(e) => setReps(e.target.value)}
+              onChange={(e) => setReps(e.target.value === '' ? '' : parseInt(e.target.value) || 0)}
               className="input-field w-20 text-center"
             />
             <span className="text-gray-400 w-8"></span>
             <button
               onClick={() => handleRepsChange(1)}
               className="w-10 h-10 rounded-lg bg-gray-700 hover:bg-gray-600 active:bg-gray-500 flex items-center justify-center text-xl font-bold"
+              aria-label="Zwiększ powtórzenia"
             >
               +
             </button>
@@ -223,20 +238,23 @@ export default function SetRow({
             <button
               onClick={() => handleWeightChange(-2.5)}
               className="w-10 h-10 rounded-lg bg-gray-700 hover:bg-gray-600 active:bg-gray-500 flex items-center justify-center text-xl font-bold"
+              aria-label="Zmniejsz ciężar"
             >
               -
             </button>
             <input
               type="number"
               value={weight}
-              onChange={(e) => setWeight(e.target.value)}
+              onChange={(e) => setWeight(e.target.value === '' ? '' : parseFloat(e.target.value) || 0)}
               className="input-field w-20 text-center"
               step="0.5"
+              aria-label="Ciężar w kilogramach"
             />
             <span className="text-gray-400">kg</span>
             <button
               onClick={() => handleWeightChange(2.5)}
               className="w-10 h-10 rounded-lg bg-gray-700 hover:bg-gray-600 active:bg-gray-500 flex items-center justify-center text-xl font-bold"
+              aria-label="Zwiększ ciężar"
             >
               +
             </button>
@@ -248,19 +266,22 @@ export default function SetRow({
             <button
               onClick={() => handleRepsChange(-1)}
               className="w-10 h-10 rounded-lg bg-gray-700 hover:bg-gray-600 active:bg-gray-500 flex items-center justify-center text-xl font-bold"
+              aria-label="Zmniejsz powtórzenia"
             >
               -
             </button>
             <input
               type="number"
               value={reps}
-              onChange={(e) => setReps(e.target.value)}
+              onChange={(e) => setReps(e.target.value === '' ? '' : parseInt(e.target.value) || 0)}
               className="input-field w-20 text-center"
+              aria-label="Liczba powtórzeń"
             />
             <span className="text-gray-400 w-8"></span>
             <button
               onClick={() => handleRepsChange(1)}
               className="w-10 h-10 rounded-lg bg-gray-700 hover:bg-gray-600 active:bg-gray-500 flex items-center justify-center text-xl font-bold"
+              aria-label="Zwiększ powtórzenia"
             >
               +
             </button>
@@ -268,13 +289,15 @@ export default function SetRow({
 
           {/* RPE Selector */}
           {showRpeSelector && (
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2" role="group" aria-label="Wybór RPE">
               <span className="text-sm text-gray-400 w-16">RPE:</span>
               <div className="flex gap-1">
                 {[6, 7, 8, 9, 10].map((value) => (
                   <button
                     key={value}
                     onClick={() => setRpe(value)}
+                    aria-label={`RPE ${value}`}
+                    aria-pressed={rpe === value}
                     className={`w-10 h-10 rounded-lg font-medium transition-colors ${
                       rpe === value
                         ? value >= 9

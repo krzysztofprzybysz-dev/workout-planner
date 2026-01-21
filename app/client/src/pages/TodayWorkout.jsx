@@ -12,16 +12,25 @@ export default function TodayWorkout() {
     startSession,
     logSet,
     finishSession,
-    getSetLog
+    getSetLog,
+    fetchWorkout,
+    fetchCurrentState
   } = useWorkout();
 
   const [showSummary, setShowSummary] = useState(false);
   const [analysisResult, setAnalysisResult] = useState(null);
   const [finishing, setFinishing] = useState(false);
+  const [finishError, setFinishError] = useState(null);
+  const [starting, setStarting] = useState(false);
 
   const handleStartWorkout = async () => {
-    if (workout) {
-      await startSession(workout.week, workout.day);
+    if (workout && !starting) {
+      setStarting(true);
+      try {
+        await startSession(workout.week, workout.day);
+      } finally {
+        setStarting(false);
+      }
     }
   };
 
@@ -31,12 +40,38 @@ export default function TodayWorkout() {
 
   const handleFinishWorkout = async () => {
     setFinishing(true);
-    const result = await finishSession('');
-    setFinishing(false);
+    setFinishError(null);
 
-    if (result?.analysis) {
-      setAnalysisResult(result.analysis);
-      setShowSummary(true);
+    try {
+      const result = await finishSession('');
+      setFinishing(false);
+
+      if (result === null) {
+        setFinishError('Nie udalo sie zakonczyc treningu. Sprobuj ponownie.');
+        return;
+      }
+
+      if (result?.analysis) {
+        setAnalysisResult(result.analysis);
+        setShowSummary(true);
+      } else {
+        // Workout finished but no analysis - still show success and refresh state
+        setShowSummary(true);
+        setAnalysisResult(null);
+      }
+    } catch (err) {
+      setFinishing(false);
+      setFinishError(err.message || 'Wystapil nieoczekiwany blad');
+    }
+  };
+
+  const handleCloseSummary = async () => {
+    setShowSummary(false);
+    setAnalysisResult(null);
+    // Refresh state instead of full page reload
+    const state = await fetchCurrentState();
+    if (state) {
+      await fetchWorkout(state.currentWeek, state.currentDay);
     }
   };
 
@@ -111,9 +146,10 @@ export default function TodayWorkout() {
 
             <button
               onClick={handleStartWorkout}
-              className="btn-primary text-lg px-8 py-4"
+              disabled={starting}
+              className="btn-primary text-lg px-8 py-4 disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              Rozpocznij Trening
+              {starting ? 'Rozpoczynanie...' : 'Rozpocznij Trening'}
             </button>
           </div>
         </div>
@@ -141,14 +177,31 @@ export default function TodayWorkout() {
         </>
       )}
 
+      {/* Finish error message */}
+      {finishError && !finishing && (
+        <div className="fixed bottom-20 left-4 right-4 z-40 bg-red-900/90 text-white rounded-lg p-4 shadow-lg">
+          <div className="flex items-center gap-3">
+            <svg className="w-6 h-6 text-red-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            <span className="flex-1">{finishError}</span>
+            <button
+              onClick={() => setFinishError(null)}
+              className="text-red-300 hover:text-white"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Summary modal */}
       {showSummary && (
         <WorkoutSummary
           analysis={analysisResult}
-          onClose={() => {
-            setShowSummary(false);
-            window.location.reload();
-          }}
+          onClose={handleCloseSummary}
         />
       )}
     </div>

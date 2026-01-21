@@ -225,11 +225,29 @@ export default function History() {
 
                   {/* AI Analysis - rozszerzona */}
                   {sessionDetails[session.id].ai_analysis && (() => {
-                    const analysis = JSON.parse(sessionDetails[session.id].ai_analysis);
+                    let analysis;
+                    try {
+                      analysis = JSON.parse(sessionDetails[session.id].ai_analysis);
+                    } catch (e) {
+                      return <div className="mt-4 p-3 bg-red-900/30 rounded-lg text-sm text-red-400">Blad parsowania analizy AI</div>;
+                    }
+
+                    // Check if this is a fallback response
+                    const isFallback = analysis.analysis?.includes('Nie udalo sie') ||
+                                      analysis.analysis?.includes('blad AI') ||
+                                      Object.values(analysis.nextWorkout || {}).some(r => r.reason?.includes('Fallback'));
+
                     return (
                       <div className="mt-4 space-y-3">
+                        {/* Fallback Warning */}
+                        {isFallback && (
+                          <div className="p-2 bg-yellow-900/30 border border-yellow-600/50 rounded-lg">
+                            <p className="text-xs text-yellow-300">AI niedostepne - uzyte poprzednie ciezary</p>
+                          </div>
+                        )}
+
                         {/* Ogolna analiza */}
-                        <div className="p-3 bg-primary-900/30 rounded-lg">
+                        <div className={`p-3 rounded-lg ${isFallback ? 'bg-gray-700/30' : 'bg-primary-900/30'}`}>
                           <div className="flex items-center gap-2 mb-2">
                             <svg className="w-4 h-4 text-primary-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
