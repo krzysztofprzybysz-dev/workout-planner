@@ -38,7 +38,7 @@ export default function TodayWorkout() {
   };
 
   const handleSetComplete = (exerciseId, setNumber, setType, data) => {
-    logSet(exerciseId, setNumber, setType, data);
+    return logSet(exerciseId, setNumber, setType, data);
   };
 
   const handleFinishWorkout = async () => {
