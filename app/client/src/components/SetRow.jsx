@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useRef } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 
 const SET_TYPE_LABELS = {
   warmup: 'Rozgrzewka',
@@ -33,7 +33,6 @@ export default function SetRow({
   const isWarmup = setType === 'warmup';
   const isDerived = setType === 'warmup' || setType === 'backoff' || setType === 'dropset';
 
-  // Memoize parsed target reps to avoid unnecessary re-renders
   const parsedTargetReps = useMemo(() => {
     return parseInt(String(targetReps).split('-')[0]) || 0;
   }, [targetReps]);
@@ -42,9 +41,23 @@ export default function SetRow({
   const [reps, setReps] = useState(initialData?.reps ?? (isWarmup ? parsedTargetReps : '') ?? '');
   const [rpe, setRpe] = useState(initialData?.rpe ?? null);
   const [completed, setCompleted] = useState(initialData?.completed ?? false);
-  const [manualOverride, setManualOverride] = useState(false);
 
   const showRpeSelector = !isWarmup && (setType === 'heavy' || setType === 'working' || setType === 'backoff');
+
+  // RPE required for non-warmup sets that show RPE selector
+  const rpeRequired = showRpeSelector && !rpe;
+  const canSave = weight && reps && !rpeRequired;
+
+  // Dynamic button text based on what's missing
+  const saveButtonText = completed
+    ? 'Wykonano'
+    : !weight
+    ? 'Wpisz ciężar'
+    : !reps
+    ? 'Wpisz powtórzenia'
+    : rpeRequired
+    ? 'Wybierz RPE'
+    : 'Zapisz serie';
 
   useEffect(() => {
     if (initialData) {
@@ -55,12 +68,12 @@ export default function SetRow({
     }
   }, [initialData, targetWeight, isWarmup, parsedTargetReps]);
 
-  // Auto-update derived sets (warmup/backoff/dropset) when primary weight changes
+  // Auto-update derived sets when primary weight changes (no sticky override)
   useEffect(() => {
-    if (isDerived && derivedWeight != null && !manualOverride && !completed) {
+    if (isDerived && derivedWeight != null && !completed) {
       setWeight(derivedWeight);
     }
-  }, [derivedWeight, isDerived, manualOverride, completed]);
+  }, [derivedWeight, isDerived, completed]);
 
   const handleComplete = () => {
     const completedAt = new Date().toISOString();
@@ -78,7 +91,7 @@ export default function SetRow({
         completed: !completed,
         completedAt
       });
-    } else if (weight && reps) {
+    } else if (canSave) {
       setCompleted(true);
       onComplete({
         weight: parseFloat(weight),
@@ -96,14 +109,12 @@ export default function SetRow({
     const current = parseFloat(weight) || 0;
     const newWeight = Math.max(0, current + delta);
     setWeight(newWeight);
-    if (isDerived) setManualOverride(true);
     if (isPrimary && onWeightChange) onWeightChange(setType, newWeight);
   };
 
   const handleWeightInput = (value) => {
     const parsed = value === '' ? '' : parseFloat(value) || 0;
     setWeight(parsed);
-    if (isDerived) setManualOverride(true);
     if (isPrimary && onWeightChange && parsed) onWeightChange(setType, parsed);
   };
 
@@ -113,6 +124,11 @@ export default function SetRow({
     setReps(newReps);
   };
 
+  // Format last result with RPE
+  const lastResultText = lastResult
+    ? `(Poprzednio: ${lastResult.weight}kg x ${lastResult.reps}${lastResult.rpe ? ` @${lastResult.rpe}` : ''})`
+    : null;
+
   return (
     <div className={`border-l-4 rounded-r-lg p-3 mb-2 ${SET_TYPE_COLORS[setType]} ${completed ? 'opacity-60' : ''}`}>
       <div className="flex items-center justify-between mb-2">
@@ -120,9 +136,9 @@ export default function SetRow({
           <span className="text-xs font-medium text-gray-400">
             {SET_TYPE_LABELS[setType]} {setNumber}
           </span>
-          {lastResult && (
+          {lastResultText && (
             <span className="text-xs text-gray-500">
-              (Poprzednio: {lastResult.weight}kg x {lastResult.reps})
+              {lastResultText}
             </span>
           )}
         </div>
@@ -308,7 +324,7 @@ export default function SetRow({
           {/* RPE Selector */}
           {showRpeSelector && (
             <div className="flex items-center gap-2" role="group" aria-label="Wybór RPE">
-              <span className="text-sm text-gray-400 w-16">RPE:</span>
+              <span className={`text-sm w-16 ${rpeRequired && weight && reps ? 'text-yellow-400' : 'text-gray-400'}`}>RPE:</span>
               <div className="flex gap-1">
                 {[6, 7, 8, 9, 10].map((value) => (
                   <button
@@ -336,16 +352,16 @@ export default function SetRow({
           {/* Complete Button */}
           <button
             onClick={handleComplete}
-            disabled={!weight || !reps}
+            disabled={!canSave}
             className={`w-full py-3 rounded-lg font-medium transition-colors ${
               completed
                 ? 'bg-green-600 text-white'
-                : weight && reps
+                : canSave
                 ? 'bg-primary-600 hover:bg-primary-700 text-white'
                 : 'bg-gray-700 text-gray-500 cursor-not-allowed'
             }`}
           >
-            {completed ? 'Wykonano' : 'Zapisz serie'}
+            {saveButtonText}
           </button>
         </div>
       )}
