@@ -251,27 +251,3 @@ export function useHistory() {
   return { sessions, loading, error, fetchHistory, resetAllData };
 }
 
-export function useExerciseHistory(exerciseId) {
-  const [history, setHistory] = useState([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    if (!exerciseId) return;
-
-    const fetchHistory = async () => {
-      try {
-        const res = await fetch(`${API_BASE}/workouts/exercise/${exerciseId}/history`);
-        const data = await res.json();
-        setHistory(data);
-      } catch (err) {
-        console.error('Failed to fetch exercise history:', err);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchHistory();
-  }, [exerciseId]);
-
-  return { history, loading };
-}

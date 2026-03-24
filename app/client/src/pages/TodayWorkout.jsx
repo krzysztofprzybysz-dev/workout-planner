@@ -5,6 +5,7 @@ import WorkoutSummary from '../components/WorkoutSummary';
 
 export default function TodayWorkout() {
   const {
+    currentState,
     workout,
     session,
     loading,
@@ -22,6 +23,8 @@ export default function TodayWorkout() {
   const [finishing, setFinishing] = useState(false);
   const [finishError, setFinishError] = useState(null);
   const [starting, setStarting] = useState(false);
+  const [sessionNotes, setSessionNotes] = useState('');
+  const [notesExpanded, setNotesExpanded] = useState(false);
 
   const handleStartWorkout = async () => {
     if (workout && !starting) {
@@ -43,7 +46,8 @@ export default function TodayWorkout() {
     setFinishError(null);
 
     try {
-      const result = await finishSession('');
+      const result = await finishSession(sessionNotes);
+      setSessionNotes('');
       setFinishing(false);
 
       if (result === null) {
@@ -144,6 +148,14 @@ export default function TodayWorkout() {
               </ul>
             </div>
 
+            {workout.week === 1 && workout.day === 1 && currentState?.completedSessions > 0 && (
+              <div className="mb-6 max-w-sm mx-auto bg-primary-900/40 border border-primary-600 rounded-xl p-4 text-left">
+                <p className="text-primary-300 text-sm font-medium">
+                  Nowy cykl programu! Zaczynasz 8-tygodniowy program od poczatku.
+                </p>
+              </div>
+            )}
+
             <button
               onClick={handleStartWorkout}
               disabled={starting}
@@ -158,6 +170,34 @@ export default function TodayWorkout() {
       {/* Active workout */}
       {session && workout && (
         <>
+          {/* Collapsible session notes */}
+          <div className="mb-2">
+            <button
+              onClick={() => setNotesExpanded(!notesExpanded)}
+              className="flex items-center gap-2 text-sm text-gray-400 hover:text-gray-300 transition-colors"
+            >
+              <svg
+                className={`w-4 h-4 transition-transform ${notesExpanded ? 'rotate-180' : ''}`}
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+              </svg>
+              Notatki do treningu
+              {sessionNotes && <span className="w-2 h-2 bg-primary-500 rounded-full" />}
+            </button>
+            {notesExpanded && (
+              <textarea
+                value={sessionNotes}
+                onChange={(e) => setSessionNotes(e.target.value)}
+                placeholder="Notatki do treningu (samopoczucie, kontuzje, zmiany...)"
+                rows={3}
+                className="mt-2 w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-primary-500 resize-none"
+              />
+            )}
+          </div>
+
           <WorkoutDay
             workout={workout}
             session={session}

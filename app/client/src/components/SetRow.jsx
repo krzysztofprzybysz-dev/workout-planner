@@ -350,19 +350,32 @@ export default function SetRow({
           )}
 
           {/* Complete Button */}
-          <button
-            onClick={handleComplete}
-            disabled={!canSave}
-            className={`w-full py-3 rounded-lg font-medium transition-colors ${
-              completed
-                ? 'bg-green-600 text-white'
-                : canSave
-                ? 'bg-primary-600 hover:bg-primary-700 text-white'
-                : 'bg-gray-700 text-gray-500 cursor-not-allowed'
-            }`}
-          >
-            {saveButtonText}
-          </button>
+          {completed ? (
+            <div className="w-full py-3 rounded-lg bg-green-600 text-white font-medium text-center flex items-center justify-center gap-3">
+              <span>Wykonano</span>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setCompleted(false);
+                }}
+                className="text-green-200 hover:text-white text-xs underline underline-offset-2 transition-colors"
+              >
+                Edytuj
+              </button>
+            </div>
+          ) : (
+            <button
+              onClick={handleComplete}
+              disabled={!canSave}
+              className={`w-full py-3 rounded-lg font-medium transition-colors ${
+                canSave
+                  ? 'bg-primary-600 hover:bg-primary-700 text-white'
+                  : 'bg-gray-700 text-gray-500 cursor-not-allowed'
+              }`}
+            >
+              {saveButtonText}
+            </button>
+          )}
         </div>
       )}
 

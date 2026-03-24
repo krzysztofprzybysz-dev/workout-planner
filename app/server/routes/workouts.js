@@ -54,6 +54,12 @@ router.get('/current', (req, res) => {
     ORDER BY started_at DESC LIMIT 1
   `).get();
 
+  // Count total completed sessions (for cycle detection on client)
+  const { completedSessions } = db.prepare(`
+    SELECT COUNT(*) as completedSessions FROM workout_sessions
+    WHERE finished_at IS NOT NULL
+  `).get();
+
   if (activeSession) {
     logger.session.active(activeSession.id, activeSession.week, activeSession.day);
   } else {
@@ -63,7 +69,8 @@ router.get('/current', (req, res) => {
   res.json({
     currentWeek,
     currentDay,
-    activeSession
+    activeSession,
+    completedSessions
   });
 });
 

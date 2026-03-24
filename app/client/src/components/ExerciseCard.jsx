@@ -12,7 +12,6 @@ export default function ExerciseCard({
   isSuperset
 }) {
   const [expanded, setExpanded] = useState(false);
-  const [exerciseNotes, setExerciseNotes] = useState('');
   const [latestPR, setLatestPR] = useState(null);
   const [showTimer, setShowTimer] = useState(false);
   const [derivedWeights, setDerivedWeights] = useState({});
@@ -165,17 +164,6 @@ export default function ExerciseCard({
               />
             );
           })}
-
-          {/* Exercise notes input */}
-          <div className="mt-3">
-            <input
-              type="text"
-              value={exerciseNotes}
-              onChange={(e) => setExerciseNotes(e.target.value)}
-              placeholder="Notatki do cwiczenia..."
-              className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-primary-500"
-            />
-          </div>
 
           {/* Rest Timer */}
           <RestTimer

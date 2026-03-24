@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import ExerciseCard from './ExerciseCard';
 
 export default function WorkoutDay({
@@ -7,6 +8,8 @@ export default function WorkoutDay({
   onFinish,
   session
 }) {
+  const [showFinishConfirm, setShowFinishConfirm] = useState(false);
+
   if (!workout) {
     return (
       <div className="flex items-center justify-center min-h-[60vh]">
@@ -86,16 +89,50 @@ export default function WorkoutDay({
       {session && (
         <div className="mt-6 px-4">
           <button
-            onClick={onFinish}
-            disabled={!isComplete}
+            onClick={() => {
+              if (isComplete) {
+                onFinish();
+              } else {
+                setShowFinishConfirm(true);
+              }
+            }}
             className={`w-full py-4 rounded-xl font-bold text-lg transition-colors ${
               isComplete
                 ? 'bg-green-600 hover:bg-green-700 text-white'
-                : 'bg-gray-700 text-gray-500 cursor-not-allowed'
+                : 'bg-yellow-600 hover:bg-yellow-700 text-white'
             }`}
           >
-            {isComplete ? 'Zakoncz Trening' : `Ukoncz wszystkie serie (${completedWorkingSets}/${totalWorkingSets})`}
+            {isComplete ? 'Zakoncz Trening' : `Zakoncz Trening (${completedWorkingSets}/${totalWorkingSets} serii)`}
           </button>
+        </div>
+      )}
+
+      {/* Finish confirmation modal for incomplete sets */}
+      {showFinishConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80">
+          <div className="bg-gray-800 rounded-2xl max-w-md w-full p-6">
+            <h2 className="text-xl font-bold text-white mb-4">Zakonczyc trening?</h2>
+            <p className="text-gray-400 mb-6">
+              Nie wszystkie serie ukonczone ({completedWorkingSets}/{totalWorkingSets}). Zakonczyc trening?
+            </p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowFinishConfirm(false)}
+                className="flex-1 py-3 bg-gray-700 hover:bg-gray-600 text-white rounded-lg transition-colors"
+              >
+                Nie
+              </button>
+              <button
+                onClick={() => {
+                  setShowFinishConfirm(false);
+                  onFinish();
+                }}
+                className="flex-1 py-3 bg-green-600 hover:bg-green-500 text-white rounded-lg transition-colors"
+              >
+                Tak
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

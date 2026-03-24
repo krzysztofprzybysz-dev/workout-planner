@@ -79,9 +79,9 @@ export default function RestTimer({ duration, isActive, onComplete, onDismiss })
     textColor = 'text-red-400';
   }
 
-  // SVG circle calculations
-  const size = 160;
-  const strokeWidth = 8;
+  // SVG circle calculations (compact mini circle)
+  const size = 80;
+  const strokeWidth = 6;
   const radius = (size - strokeWidth) / 2;
   const circumference = 2 * Math.PI * radius;
   const dashoffset = circumference * (1 - progress);
@@ -92,10 +92,10 @@ export default function RestTimer({ duration, isActive, onComplete, onDismiss })
   };
 
   return (
-    <div className="mt-4 p-4 bg-gray-800 rounded-xl border border-gray-700">
-      <div className="flex flex-col items-center">
-        {/* Circular countdown */}
-        <div className="relative" style={{ width: size, height: size }}>
+    <div className="fixed bottom-20 left-4 right-4 z-40 p-3 bg-gray-800/95 backdrop-blur-sm rounded-xl border border-gray-700 shadow-lg shadow-black/40">
+      <div className="flex items-center gap-3">
+        {/* Mini circular countdown */}
+        <div className="relative flex-shrink-0" style={{ width: size, height: size }}>
           <svg
             width={size}
             height={size}
@@ -125,29 +125,37 @@ export default function RestTimer({ duration, isActive, onComplete, onDismiss })
               style={{ transition: 'stroke-dashoffset 1s linear' }}
             />
           </svg>
-          {/* Time display centered over the SVG */}
-          <div className="absolute inset-0 flex flex-col items-center justify-center">
-            <span className={`text-3xl font-mono font-bold ${textColor}`}>
+          {/* Time display centered over the mini SVG */}
+          <div className="absolute inset-0 flex items-center justify-center">
+            <span className={`text-lg font-mono font-bold ${textColor}`}>
               {timeDisplay}
             </span>
-            <span className="text-xs text-gray-500 mt-1">Odpoczynek</span>
           </div>
         </div>
 
+        {/* Label */}
+        <div className="flex flex-col min-w-0">
+          <span className="text-sm font-medium text-gray-300">Odpoczynek</span>
+          <span className="text-xs text-gray-500">{isPaused ? 'Pauza' : 'Trwa...'}</span>
+        </div>
+
+        {/* Spacer */}
+        <div className="flex-1" />
+
         {/* Control buttons */}
-        <div className="flex items-center gap-3 mt-4">
+        <div className="flex items-center gap-2 flex-shrink-0">
           {/* Pause / Resume button */}
           <button
             onClick={isPaused ? resumeTimer : pauseTimer}
-            className="w-12 h-12 rounded-full bg-gray-700 hover:bg-gray-600 active:bg-gray-500 flex items-center justify-center transition-colors"
+            className="w-10 h-10 rounded-full bg-gray-700 hover:bg-gray-600 active:bg-gray-500 flex items-center justify-center transition-colors"
             aria-label={isPaused ? 'Wznow' : 'Pauza'}
           >
             {isPaused ? (
-              <svg className="w-5 h-5 text-white" fill="currentColor" viewBox="0 0 24 24">
+              <svg className="w-4 h-4 text-white" fill="currentColor" viewBox="0 0 24 24">
                 <path d="M8 5v14l11-7z" />
               </svg>
             ) : (
-              <svg className="w-5 h-5 text-white" fill="currentColor" viewBox="0 0 24 24">
+              <svg className="w-4 h-4 text-white" fill="currentColor" viewBox="0 0 24 24">
                 <path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z" />
               </svg>
             )}
@@ -156,7 +164,7 @@ export default function RestTimer({ duration, isActive, onComplete, onDismiss })
           {/* +30s button */}
           <button
             onClick={() => extendTimer(30)}
-            className="h-12 px-4 rounded-full bg-gray-700 hover:bg-gray-600 active:bg-gray-500 flex items-center justify-center text-sm font-medium text-white transition-colors"
+            className="h-10 px-3 rounded-full bg-gray-700 hover:bg-gray-600 active:bg-gray-500 flex items-center justify-center text-xs font-medium text-white transition-colors"
             aria-label="Dodaj 30 sekund"
           >
             +30s
@@ -165,10 +173,10 @@ export default function RestTimer({ duration, isActive, onComplete, onDismiss })
           {/* Dismiss button */}
           <button
             onClick={handleDismiss}
-            className="w-12 h-12 rounded-full bg-gray-700 hover:bg-red-600/80 active:bg-red-700 flex items-center justify-center transition-colors"
+            className="w-10 h-10 rounded-full bg-gray-700 hover:bg-red-600/80 active:bg-red-700 flex items-center justify-center transition-colors"
             aria-label="Zamknij timer"
           >
-            <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
             </svg>
           </button>
