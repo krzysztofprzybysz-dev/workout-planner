@@ -106,6 +106,26 @@ if (!tablesExist) {
   logger.info('DATABASE', 'Database seeded successfully');
 }
 
+// Ensure new tables exist (migration for existing databases)
+const prTableExists = db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='personal_records'").get();
+if (!prTableExists) {
+  logger.info('DATABASE', 'Creating personal_records table...');
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS personal_records (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      exercise_id INTEGER REFERENCES exercises(id),
+      record_type TEXT NOT NULL,
+      set_type TEXT,
+      weight REAL,
+      reps INTEGER,
+      estimated_1rm REAL,
+      session_id INTEGER REFERENCES workout_sessions(id),
+      achieved_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+    CREATE INDEX IF NOT EXISTS idx_personal_records_exercise ON personal_records(exercise_id);
+  `);
+}
+
 app.use((req, res, next) => {
   req.db = db;
   next();

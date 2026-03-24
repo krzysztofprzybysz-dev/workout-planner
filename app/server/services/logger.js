@@ -22,7 +22,6 @@ const colors = {
   session: '\x1b[34m', // blue
   set: '\x1b[36m',     // cyan
   db: '\x1b[33m',      // yellow
-  claude: '\x1b[95m',  // bright magenta
   validation: '\x1b[94m', // bright blue
   progression: '\x1b[92m', // bright green
 };
@@ -149,29 +148,6 @@ const logger = {
   set: (exerciseName, weight, reps, rpe) => {
     const rpeStr = rpe ? ` @ RPE ${rpe}` : '';
     log('info', 'SET', `${exerciseName}: ${weight}kg x ${reps}${rpeStr}`);
-  },
-
-  /**
-   * Claude API logging
-   */
-  claude: {
-    calling: (purpose, data) => {
-      log('info', 'CLAUDE', `Calling API for ${purpose}...`, data);
-    },
-    response: (duration, tokens) => {
-      const tokensStr = tokens ? `, ${tokens} tokens` : '';
-      log('info', 'CLAUDE', `Response received (${duration}s${tokensStr})`);
-    },
-    error: (error, context) => {
-      log('error', 'CLAUDE', `API error: ${error.message}`, context);
-    },
-    parsing: (success, detail) => {
-      if (success) {
-        log('debug', 'CLAUDE', 'JSON parsed successfully', detail);
-      } else {
-        log('warn', 'CLAUDE', 'JSON parsing failed', detail);
-      }
-    },
   },
 
   /**

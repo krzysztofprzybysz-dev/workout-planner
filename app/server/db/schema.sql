@@ -70,3 +70,18 @@ CREATE INDEX IF NOT EXISTS idx_workout_plans_week_day ON workout_plans(week, day
 CREATE INDEX IF NOT EXISTS idx_set_logs_session ON set_logs(session_id);
 CREATE INDEX IF NOT EXISTS idx_set_logs_exercise ON set_logs(exercise_id);
 CREATE INDEX IF NOT EXISTS idx_progression_exercise ON progression(exercise_id);
+
+-- Rekordy osobiste
+CREATE TABLE IF NOT EXISTS personal_records (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    exercise_id INTEGER REFERENCES exercises(id),
+    record_type TEXT NOT NULL,
+    set_type TEXT,
+    weight REAL,
+    reps INTEGER,
+    estimated_1rm REAL,
+    session_id INTEGER REFERENCES workout_sessions(id),
+    achieved_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_personal_records_exercise ON personal_records(exercise_id);

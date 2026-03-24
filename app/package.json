@@ -1,7 +1,7 @@
 {
   "name": "workout-planner",
   "version": "1.0.0",
-  "description": "Adaptive AI Workout Planner based on Jeff Nippard Essentials",
+  "description": "Workout Planner based on Jeff Nippard Essentials",
   "scripts": {
     "dev": "concurrently \"npm run server\" \"npm run client\"",
     "server": "cd server && node index.js",

@@ -5,6 +5,7 @@ export default function Progress() {
   const [exercises, setExercises] = useState([]);
   const [selectedExercise, setSelectedExercise] = useState(null);
   const [history, setHistory] = useState([]);
+  const [personalRecords, setPersonalRecords] = useState([]);
   const [loading, setLoading] = useState(true);
 
   // Ladowanie cwiczen - use Promise.allSettled to handle partial failures
@@ -47,25 +48,36 @@ export default function Progress() {
   useEffect(() => {
     if (!selectedExercise) {
       setHistory([]);
+      setPersonalRecords([]);
       return;
     }
 
     const abortController = new AbortController();
-    const loadHistory = async () => {
+    const loadData = async () => {
       try {
-        const res = await fetch(`/api/workouts/exercise/${selectedExercise}/history`, {
-          signal: abortController.signal
-        });
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        const data = await res.json();
-        setHistory(data);
+        const [historyRes, prsRes] = await Promise.all([
+          fetch(`/api/workouts/exercise/${selectedExercise}/history`, {
+            signal: abortController.signal
+          }),
+          fetch(`/api/workouts/exercise/${selectedExercise}/prs`, {
+            signal: abortController.signal
+          })
+        ]);
+        if (!historyRes.ok) throw new Error(`HTTP ${historyRes.status}`);
+        const historyData = await historyRes.json();
+        setHistory(historyData);
+
+        if (prsRes.ok) {
+          const prsData = await prsRes.json();
+          setPersonalRecords(prsData);
+        }
       } catch (err) {
         if (err.name !== 'AbortError') {
-          console.error('Failed to load history:', err);
+          console.error('Failed to load data:', err);
         }
       }
     };
-    loadHistory();
+    loadData();
 
     return () => abortController.abort();
   }, [selectedExercise]);
@@ -97,11 +109,29 @@ export default function Progress() {
   const maxWeight = nonWarmup.length > 0 ? Math.max(...nonWarmup.map(h => h.actual_weight || 0)) : 0;
   const sessionCount = Object.keys(historyByDate).length;
 
-  // Rekordy osobiste
+  // Rekordy osobiste (from server PR data, with client-side fallback)
+  const prMaxWeight = personalRecords.find(pr => pr.record_type === 'max_weight');
+  const prMaxReps = personalRecords.find(pr => pr.record_type === 'max_reps_at_weight');
+  const prBestE1RM = personalRecords.find(pr => pr.record_type === 'best_e1rm');
+
+  // Client-side fallback for estimated 1RM if no server PR data
+  const clientBestE1RM = nonWarmup.reduce((best, h) => {
+    if (h.actual_weight > 0 && h.actual_reps > 0) {
+      const e1rm = h.actual_reps === 1
+        ? h.actual_weight
+        : h.actual_weight * (1 + h.actual_reps / 30);
+      return e1rm > best ? e1rm : best;
+    }
+    return best;
+  }, 0);
+
+  // Legacy fallback for old PR display
   const prs = {
     heavy: nonWarmup.filter(h => h.set_type === 'heavy').sort((a, b) => b.actual_weight - a.actual_weight)[0],
     working: nonWarmup.filter(h => h.set_type === 'working').sort((a, b) => b.actual_weight - a.actual_weight)[0]
   };
+
+  const hasPRData = prMaxWeight || prMaxReps || prBestE1RM;
 
   if (loading) {
     return (
@@ -178,26 +208,48 @@ export default function Progress() {
           )}
 
           {/* Rekordy osobiste */}
-          {(prs.heavy || prs.working) && (
+          {(hasPRData || prs.heavy || prs.working || maxWeight > 0) && (
             <div className="card mb-6">
               <h3 className="font-medium text-white mb-3 flex items-center gap-2">
                 <span className="text-yellow-400">&#127942;</span> Rekordy osobiste
               </h3>
-              <div className="grid grid-cols-2 gap-2">
-                {prs.heavy && (
-                  <div className="bg-red-900/30 rounded-lg p-3 text-center">
-                    <p className="text-xs text-gray-400">Heavy PR</p>
-                    <p className="text-xl font-bold text-red-400">{prs.heavy.actual_weight}kg</p>
-                    <p className="text-xs text-gray-500">{prs.heavy.actual_reps} reps</p>
-                  </div>
-                )}
-                {prs.working && (
-                  <div className="bg-blue-900/30 rounded-lg p-3 text-center">
-                    <p className="text-xs text-gray-400">Working PR</p>
-                    <p className="text-xl font-bold text-blue-400">{prs.working.actual_weight}kg</p>
-                    <p className="text-xs text-gray-500">{prs.working.actual_reps} reps</p>
-                  </div>
-                )}
+              <div className="grid grid-cols-3 gap-2">
+                {/* Max Weight */}
+                <div className="bg-yellow-900/30 border border-yellow-700/30 rounded-lg p-3 text-center">
+                  <p className="text-xs text-gray-400">Max ciezar</p>
+                  <p className="text-xl font-bold text-yellow-400">
+                    {prMaxWeight ? prMaxWeight.weight : maxWeight}kg
+                  </p>
+                  {prMaxWeight && (
+                    <p className="text-xs text-gray-500">{prMaxWeight.reps} reps ({prMaxWeight.set_type})</p>
+                  )}
+                </div>
+                {/* Max Reps at Weight */}
+                <div className="bg-green-900/30 border border-green-700/30 rounded-lg p-3 text-center">
+                  <p className="text-xs text-gray-400">Max powtorzen</p>
+                  {prMaxReps ? (
+                    <>
+                      <p className="text-xl font-bold text-green-400">{prMaxReps.reps}x</p>
+                      <p className="text-xs text-gray-500">@ {prMaxReps.weight}kg</p>
+                    </>
+                  ) : (
+                    <p className="text-sm text-gray-500 mt-1">Brak danych</p>
+                  )}
+                </div>
+                {/* Best Estimated 1RM */}
+                <div className="bg-purple-900/30 border border-purple-700/30 rounded-lg p-3 text-center">
+                  <p className="text-xs text-gray-400">Szac. 1RM</p>
+                  <p className="text-xl font-bold text-purple-400">
+                    {prBestE1RM
+                      ? Math.round(prBestE1RM.estimated_1rm * 10) / 10
+                      : clientBestE1RM > 0
+                        ? Math.round(clientBestE1RM * 10) / 10
+                        : '—'}kg
+                  </p>
+                  {prBestE1RM && (
+                    <p className="text-xs text-gray-500">{prBestE1RM.weight}kg x {prBestE1RM.reps}</p>
+                  )}
+                </div>
               </div>
             </div>
           )}

@@ -111,13 +111,15 @@ export function useWorkout() {
         throw new Error(errorData.error || `Server error: ${res.status}`);
       }
 
+      const responseData = await res.json();
+
       // Only update local state AFTER successful server save
       setSetLogs(prev => ({
         ...prev,
         [key]: { ...data, completed: true }
       }));
 
-      return { success: true };
+      return { success: true, pr: responseData.pr };
     } catch (err) {
       console.error('Failed to log set:', err);
       setError(`Nie udalo sie zapisac serii: ${err.message}`);

@@ -1,5 +1,7 @@
 import { useState } from 'react';
 import SetRow from './SetRow';
+import PRBadge from './PRBadge';
+import RestTimer from './RestTimer';
 
 export default function ExerciseCard({
   exercise,
@@ -10,6 +12,8 @@ export default function ExerciseCard({
 }) {
   const [expanded, setExpanded] = useState(false);
   const [exerciseNotes, setExerciseNotes] = useState('');
+  const [latestPR, setLatestPR] = useState(null);
+  const [showTimer, setShowTimer] = useState(false);
 
   // Count completed working sets (use same setNumber logic as SetRow rendering)
   const workingSets = exercise.sets.filter(s => s.type !== 'warmup');
@@ -25,6 +29,7 @@ export default function ExerciseCard({
 
   return (
     <div className={`card mb-4 ${isSuperset ? 'border-l-4 border-yellow-500' : ''}`}>
+      <PRBadge prResult={latestPR} onDismiss={() => setLatestPR(null)} />
       {/* Header */}
       <div
         className="flex items-center justify-between cursor-pointer"
@@ -98,7 +103,25 @@ export default function ExerciseCard({
                 lastResult={set.lastResult}
                 progressionReason={set.progressionReason}
                 initialData={existingLog}
-                onComplete={(data) => onSetComplete(exercise.exerciseId, setNumber, set.type, data)}
+                onComplete={async (data) => {
+                  const result = await onSetComplete(exercise.exerciseId, setNumber, set.type, data);
+                  if (result?.pr?.isPR) {
+                    setLatestPR(result.pr);
+                  }
+                  // Show rest timer if there are more working sets remaining after this one
+                  if (data.completed && set.type !== 'warmup') {
+                    const newCompletedCount = workingSets.filter((ws) => {
+                      const wsOrigIdx = exercise.sets.indexOf(ws);
+                      const wsSetNum = exercise.sets.filter((s, i) => s.type !== 'warmup' && i <= wsOrigIdx).length;
+                      if (ws === set && wsSetNum === setNumber) return true;
+                      const log = getSetLog(exercise.exerciseId, wsSetNum, ws.type);
+                      return log?.completed;
+                    }).length;
+                    if (newCompletedCount < workingSets.length) {
+                      setShowTimer(true);
+                    }
+                  }
+                }}
               />
             );
           })}
@@ -113,6 +136,14 @@ export default function ExerciseCard({
               className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-primary-500"
             />
           </div>
+
+          {/* Rest Timer */}
+          <RestTimer
+            duration={exercise.exerciseType === 'compound' ? 120 : 90}
+            isActive={showTimer}
+            onComplete={() => setShowTimer(false)}
+            onDismiss={() => setShowTimer(false)}
+          />
         </div>
       )}
     </div>

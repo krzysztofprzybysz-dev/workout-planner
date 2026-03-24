@@ -170,7 +170,7 @@ export default function TodayWorkout() {
             <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80">
               <div className="text-center">
                 <div className="w-12 h-12 border-4 border-primary-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-                <p className="text-white">Analizowanie treningu...</p>
+                <p className="text-white">Obliczanie progresji...</p>
               </div>
             </div>
           )}

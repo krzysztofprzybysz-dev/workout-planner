@@ -4,6 +4,7 @@ import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import logger from '../services/logger.js';
 import { calculateWarmupWeights, getEquipmentType } from '../utils/warmupCalculator.js';
+import { checkForPR, getExercisePRs } from '../services/prTracker.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -16,6 +17,10 @@ const PROGRAM_WEEKS = parseInt(process.env.PROGRAM_WEEKS) || 8;
 // Load program data
 const programPath = join(__dirname, '../../data/program.json');
 const program = JSON.parse(readFileSync(programPath, 'utf8'));
+
+// Load program rules (exercise types, progression rules)
+const programRulesPath = join(__dirname, '../../data/program-rules.json');
+const programRules = JSON.parse(readFileSync(programRulesPath, 'utf8'));
 
 // Get current workout state (which week/day we're on)
 router.get('/current', (req, res) => {
@@ -223,6 +228,7 @@ router.get('/:week/:day', (req, res) => {
       order: ex.order,
       name: exerciseInfo.name,
       muscleGroup: exerciseInfo.muscle_group,
+      exerciseType: programRules.exerciseRules?.[exerciseInfo.name]?.type || 'isolation',
       notes: exerciseInfo.notes,
       substitution: exerciseInfo.substitution_1,
       supersetWith: ex.supersetWith,
@@ -380,7 +386,13 @@ router.post('/session/:sessionId/set', (req, res) => {
 
   logger.set(exerciseName, validatedActualWeight, validatedActualReps, validatedRpe);
 
-  res.json({ success: true });
+  // Check for personal records
+  const prResult = checkForPR(db, exerciseIdNum, setType, validatedActualWeight, validatedActualReps, sessionIdNum);
+  if (prResult.isPR) {
+    logger.info('PR', `New PR for ${exerciseName}: ${prResult.types.join(', ')}`);
+  }
+
+  res.json({ success: true, pr: prResult });
 });
 
 // Finish a workout session
@@ -448,6 +460,19 @@ router.get('/history', (req, res) => {
   logger.debug('HISTORY', `Returned ${sessions.length} sessions (offset: ${offset})`);
 
   res.json(sessions);
+});
+
+// Get exercise personal records
+router.get('/exercise/:exerciseId/prs', (req, res) => {
+  const db = req.db;
+  const exerciseId = parseInt(req.params.exerciseId);
+
+  if (!Number.isInteger(exerciseId) || exerciseId < 1) {
+    return res.status(400).json({ error: 'Invalid exerciseId' });
+  }
+
+  const prs = getExercisePRs(db, exerciseId);
+  res.json(prs);
 });
 
 // Get exercise history

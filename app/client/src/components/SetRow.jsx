@@ -113,7 +113,7 @@ export default function SetRow({
           </span>
           {progressionReason && (
             <p className="text-xs text-primary-400/70 mt-0.5 max-w-[200px] truncate" title={progressionReason}>
-              AI: {progressionReason}
+              {progressionReason}
             </p>
           )}
         </div>
