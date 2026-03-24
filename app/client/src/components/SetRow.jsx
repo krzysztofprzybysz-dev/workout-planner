@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 
 const SET_TYPE_LABELS = {
   warmup: 'Rozgrzewka',
@@ -25,9 +25,13 @@ export default function SetRow({
   lastResult,
   progressionReason,
   onComplete,
-  initialData
+  initialData,
+  derivedWeight,
+  isPrimary,
+  onWeightChange
 }) {
   const isWarmup = setType === 'warmup';
+  const isDerived = setType === 'warmup' || setType === 'backoff' || setType === 'dropset';
 
   // Memoize parsed target reps to avoid unnecessary re-renders
   const parsedTargetReps = useMemo(() => {
@@ -38,6 +42,7 @@ export default function SetRow({
   const [reps, setReps] = useState(initialData?.reps ?? (isWarmup ? parsedTargetReps : '') ?? '');
   const [rpe, setRpe] = useState(initialData?.rpe ?? null);
   const [completed, setCompleted] = useState(initialData?.completed ?? false);
+  const [manualOverride, setManualOverride] = useState(false);
 
   const showRpeSelector = !isWarmup && (setType === 'heavy' || setType === 'working' || setType === 'backoff');
 
@@ -50,14 +55,19 @@ export default function SetRow({
     }
   }, [initialData, targetWeight, isWarmup, parsedTargetReps]);
 
+  // Auto-update derived sets (warmup/backoff/dropset) when primary weight changes
+  useEffect(() => {
+    if (isDerived && derivedWeight != null && !manualOverride && !completed) {
+      setWeight(derivedWeight);
+    }
+  }, [derivedWeight, isDerived, manualOverride, completed]);
+
   const handleComplete = () => {
-    const completedAt = new Date().toISOString(); // Timestamp for rest time calculation
+    const completedAt = new Date().toISOString();
 
     if (isWarmup) {
       setCompleted(!completed);
-      // Ensure weight and reps are proper numbers for warmup sets
-      const parsedWeight = parseFloat(targetWeight) || 0;
-      // Handle rep ranges like "8-10" by taking the first number
+      const parsedWeight = parseFloat(weight) || parseFloat(targetWeight) || 0;
       const parsedReps = parseInt(String(targetReps).split('-')[0]) || 0;
       onComplete({
         weight: parsedWeight,
@@ -82,10 +92,19 @@ export default function SetRow({
     }
   };
 
-  const handleWeightChange = (delta) => {
+  const handleWeightChangeByDelta = (delta) => {
     const current = parseFloat(weight) || 0;
     const newWeight = Math.max(0, current + delta);
     setWeight(newWeight);
+    if (isDerived) setManualOverride(true);
+    if (isPrimary && onWeightChange) onWeightChange(setType, newWeight);
+  };
+
+  const handleWeightInput = (value) => {
+    const parsed = value === '' ? '' : parseFloat(value) || 0;
+    setWeight(parsed);
+    if (isDerived) setManualOverride(true);
+    if (isPrimary && onWeightChange && parsed) onWeightChange(setType, parsed);
   };
 
   const handleRepsChange = (delta) => {
@@ -125,7 +144,7 @@ export default function SetRow({
           <div className="flex items-center gap-2">
             <span className="text-sm text-gray-400 w-16">Ciężar:</span>
             <button
-              onClick={() => handleWeightChange(-2.5)}
+              onClick={() => handleWeightChangeByDelta(-2.5)}
               className="w-10 h-10 rounded-lg bg-gray-700 hover:bg-gray-600 active:bg-gray-500 flex items-center justify-center text-xl font-bold"
               aria-label="Zmniejsz ciężar"
             >
@@ -134,14 +153,14 @@ export default function SetRow({
             <input
               type="number"
               value={weight}
-              onChange={(e) => setWeight(e.target.value === '' ? '' : parseFloat(e.target.value) || 0)}
+              onChange={(e) => handleWeightInput(e.target.value)}
               className="input-field w-20 text-center"
               step="0.5"
               aria-label="Ciężar w kilogramach"
             />
             <span className="text-gray-400">kg</span>
             <button
-              onClick={() => handleWeightChange(2.5)}
+              onClick={() => handleWeightChangeByDelta(2.5)}
               className="w-10 h-10 rounded-lg bg-gray-700 hover:bg-gray-600 active:bg-gray-500 flex items-center justify-center text-xl font-bold"
               aria-label="Zwiększ ciężar"
             >
@@ -180,8 +199,7 @@ export default function SetRow({
           <div className="flex gap-2">
             <button
               onClick={() => {
-                // Quick complete with default values
-                const parsedWeight = parseFloat(targetWeight) || 0;
+                const parsedWeight = parseFloat(weight) || parseFloat(targetWeight) || 0;
                 const parsedReps = parseInt(String(targetReps).split('-')[0]) || 0;
                 const completedAt = new Date().toISOString();
                 setWeight(parsedWeight);
@@ -203,7 +221,7 @@ export default function SetRow({
                   : 'bg-gray-600 hover:bg-gray-500 text-white'
               }`}
             >
-              {completed ? '✓ Wykonano' : `Szybko (${targetWeight}kg)`}
+              {completed ? '✓ Wykonano' : `Szybko (${weight || targetWeight}kg)`}
             </button>
             {!completed && (
               <button
@@ -236,7 +254,7 @@ export default function SetRow({
           <div className="flex items-center gap-2">
             <span className="text-sm text-gray-400 w-16">Ciężar:</span>
             <button
-              onClick={() => handleWeightChange(-2.5)}
+              onClick={() => handleWeightChangeByDelta(-2.5)}
               className="w-10 h-10 rounded-lg bg-gray-700 hover:bg-gray-600 active:bg-gray-500 flex items-center justify-center text-xl font-bold"
               aria-label="Zmniejsz ciężar"
             >
@@ -245,14 +263,14 @@ export default function SetRow({
             <input
               type="number"
               value={weight}
-              onChange={(e) => setWeight(e.target.value === '' ? '' : parseFloat(e.target.value) || 0)}
+              onChange={(e) => handleWeightInput(e.target.value)}
               className="input-field w-20 text-center"
               step="0.5"
               aria-label="Ciężar w kilogramach"
             />
             <span className="text-gray-400">kg</span>
             <button
-              onClick={() => handleWeightChange(2.5)}
+              onClick={() => handleWeightChangeByDelta(2.5)}
               className="w-10 h-10 rounded-lg bg-gray-700 hover:bg-gray-600 active:bg-gray-500 flex items-center justify-center text-xl font-bold"
               aria-label="Zwiększ ciężar"
             >

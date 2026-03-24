@@ -1,7 +1,8 @@
-import { useState } from 'react';
+import { useState, useCallback, useMemo } from 'react';
 import SetRow from './SetRow';
 import PRBadge from './PRBadge';
 import RestTimer from './RestTimer';
+import { calculateDerivedWeights } from '../utils/weightCalculator';
 
 export default function ExerciseCard({
   exercise,
@@ -14,11 +15,19 @@ export default function ExerciseCard({
   const [exerciseNotes, setExerciseNotes] = useState('');
   const [latestPR, setLatestPR] = useState(null);
   const [showTimer, setShowTimer] = useState(false);
+  const [derivedWeights, setDerivedWeights] = useState({});
 
-  // Count completed working sets (use same setNumber logic as SetRow rendering)
+  // Determine which set type is "primary" (drives warmup/backoff/dropset calculations)
+  const primarySetType = useMemo(() => {
+    const types = exercise.sets.map(s => s.type);
+    if (types.includes('heavy')) return 'heavy';
+    if (types.includes('working')) return 'working';
+    return null;
+  }, [exercise.sets]);
+
+  // Count completed working sets
   const workingSets = exercise.sets.filter(s => s.type !== 'warmup');
   const completedSets = workingSets.filter((set) => {
-    // Find original index in full sets array and calculate setNumber consistently
     const originalIdx = exercise.sets.indexOf(set);
     const setNumber = exercise.sets.filter((s, i) => s.type !== 'warmup' && i <= originalIdx).length;
     const log = getSetLog(exercise.exerciseId, setNumber, set.type);
@@ -26,6 +35,27 @@ export default function ExerciseCard({
   }).length;
 
   const isComplete = completedSets === workingSets.length && workingSets.length > 0;
+
+  // Called by SetRow when user changes weight in a primary set
+  const handleWeightChange = useCallback((setType, newWeight) => {
+    if (!primarySetType) return;
+    // Only recalculate if this is the primary set type
+    if (setType === primarySetType) {
+      const derived = calculateDerivedWeights(exercise.name, newWeight, primarySetType);
+      setDerivedWeights(derived);
+    }
+  }, [primarySetType, exercise.name]);
+
+  // Determine the derived weight for a specific set based on its type and index
+  const getDerivedWeight = useCallback((setType, warmupIndex) => {
+    if (setType === 'warmup') {
+      // warmupIndex 1 = first warmup (50%), 2 = second warmup (70%)
+      return warmupIndex === 1 ? derivedWeights.warmup1 : derivedWeights.warmup2;
+    }
+    if (setType === 'backoff') return derivedWeights.backoff;
+    if (setType === 'dropset') return derivedWeights.dropset;
+    return undefined; // primary sets don't get derived weight
+  }, [derivedWeights]);
 
   return (
     <div className={`card mb-4 ${isSuperset ? 'border-l-4 border-yellow-500' : ''}`}>
@@ -92,6 +122,13 @@ export default function ExerciseCard({
 
             const existingLog = getSetLog(exercise.exerciseId, setNumber, set.type);
 
+            // Calculate warmup index for derived weight lookup
+            const warmupIndex = set.type === 'warmup' ? setNumber : 0;
+            const derivedWeight = getDerivedWeight(set.type, warmupIndex);
+
+            // Is this a primary set (heavy or first working when no heavy)?
+            const isPrimary = set.type === primarySetType;
+
             return (
               <SetRow
                 key={`${set.type}-${idx}`}
@@ -103,6 +140,9 @@ export default function ExerciseCard({
                 lastResult={set.lastResult}
                 progressionReason={set.progressionReason}
                 initialData={existingLog}
+                derivedWeight={derivedWeight}
+                isPrimary={isPrimary}
+                onWeightChange={handleWeightChange}
                 onComplete={async (data) => {
                   const result = await onSetComplete(exercise.exerciseId, setNumber, set.type, data);
                   if (result?.pr?.isPR) {
